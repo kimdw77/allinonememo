@@ -2,7 +2,7 @@
 
 /**
  * app/auth/callback/page.tsx — Magic Link 클릭 후 세션 처리
- * URL 해시에서 access_token을 직접 읽어 세션 설정
+ * 클라이언트에서 code를 처리해 localStorage의 code verifier를 사용
  */
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -13,14 +13,27 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const supabase = createClient();
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+
+    if (code) {
+      // 클라이언트에서 처리 → localStorage의 code verifier 접근 가능
+      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+        if (!error) {
+          router.replace("/");
+        } else {
+          router.replace("/login");
+        }
+      });
+      return;
+    }
+
+    // 해시 방식 fallback (#access_token=xxx)
     const hash = window.location.hash;
-
     if (hash) {
-      // URL 해시에서 토큰 추출 (#access_token=xxx&refresh_token=xxx)
-      const params = new URLSearchParams(hash.slice(1));
-      const access_token = params.get("access_token");
-      const refresh_token = params.get("refresh_token");
-
+      const hashParams = new URLSearchParams(hash.slice(1));
+      const access_token = hashParams.get("access_token");
+      const refresh_token = hashParams.get("refresh_token");
       if (access_token && refresh_token) {
         supabase.auth.setSession({ access_token, refresh_token }).then(({ error }) => {
           if (!error) {
@@ -33,14 +46,7 @@ export default function AuthCallbackPage() {
       }
     }
 
-    // 해시가 없으면 기존 세션 확인
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        router.replace("/");
-      } else {
-        router.replace("/login");
-      }
-    });
+    router.replace("/login");
   }, [router]);
 
   return (
