@@ -2,26 +2,27 @@
  * app/auth/callback/route.ts — Magic Link 이메일 클릭 후 세션 교환 처리
  */
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
 
   if (code) {
-    const cookieStore = cookies();
+    // 리다이렉트 응답을 먼저 생성하고 쿠키를 응답에 직접 설정
+    const response = NextResponse.redirect(`${origin}/`);
+
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
           getAll() {
-            return cookieStore.getAll();
+            return request.cookies.getAll();
           },
           setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
             cookiesToSet.forEach(({ name, value, options }) =>
-              cookieStore.set(name, value, options as Parameters<typeof cookieStore.set>[2])
+              response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2])
             );
           },
         },
@@ -30,9 +31,9 @@ export async function GET(request: Request) {
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      return NextResponse.redirect(`${origin}/`);
+      return response;
     }
   }
 
-  return NextResponse.redirect(`${origin}/login?error=인증에 실패했습니다`);
+  return NextResponse.redirect(`${origin}/login`);
 }
