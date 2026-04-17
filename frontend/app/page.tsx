@@ -2,6 +2,7 @@
 
 /**
  * app/page.tsx — 메인 대시보드 (사이드바 + 노트 목록)
+ * 모바일 최적화: 사이드바 드로어, 햄버거 메뉴, 반응형 패딩
  */
 import { useState, useEffect, useCallback } from "react";
 import NoteCard from "@/components/NoteCard";
@@ -24,6 +25,7 @@ export default function DashboardPage() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const fetchNotes = useCallback(async () => {
     setLoading(true);
@@ -52,13 +54,26 @@ export default function DashboardPage() {
         selected={category}
         onSelect={setCategory}
         noteCount={notes.length}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
-      {/* 메인 콘텐츠 */}
-      <main className="ml-60 flex-1 min-h-screen">
+      {/* 메인 콘텐츠: 데스크탑은 사이드바 너비만큼 margin, 모바일은 0 */}
+      <main className="flex-1 min-h-screen sm:ml-60">
         {/* 상단 헤더 */}
-        <header className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm border-b border-slate-200 px-8 py-4">
-          <div className="max-w-3xl mx-auto flex items-center gap-4">
+        <header className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm border-b border-slate-200 px-4 sm:px-8 py-3 sm:py-4">
+          <div className="max-w-3xl mx-auto flex items-center gap-3">
+            {/* 햄버거 버튼 (모바일 전용) */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="sm:hidden p-2 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0"
+              aria-label="메뉴 열기"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
+
             {/* 검색바 */}
             <div className="relative flex-1">
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
@@ -72,11 +87,12 @@ export default function DashboardPage() {
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent shadow-sm"
               />
             </div>
+
             {/* 새로고침 */}
             <button
               onClick={fetchNotes}
               disabled={loading}
-              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm disabled:opacity-50"
+              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm disabled:opacity-50 shrink-0"
               title="새로고침"
             >
               <svg
@@ -97,9 +113,9 @@ export default function DashboardPage() {
         </header>
 
         {/* 노트 목록 */}
-        <div className="max-w-3xl mx-auto px-8 py-6">
+        <div className="max-w-3xl mx-auto px-4 sm:px-8 py-5 sm:py-6">
           {/* 상태 표시 */}
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center justify-between mb-4 sm:mb-5">
             <h2 className="text-slate-700 font-semibold text-base">
               {category ? `${category}` : "전체 노트"}
             </h2>

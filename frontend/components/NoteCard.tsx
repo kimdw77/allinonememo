@@ -79,19 +79,19 @@ export default function NoteCard({ note, onDelete }: NoteCardProps) {
 
   return (
     <article
-      className={`bg-white rounded-xl border border-slate-200 border-l-4 ${accentClass} p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200`}
+      className={`bg-white rounded-xl border border-slate-200 border-l-4 ${accentClass} p-4 sm:p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200`}
     >
-      {/* 상단: 소스·카테고리·날짜·삭제 */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-sm">{icon}</span>
-          <span className="text-xs text-slate-400">{sourceLabel}</span>
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${badgeClass}`}>
+      {/* 상단: 소스·카테고리 / 날짜·삭제 — 모바일에서 두 줄로 자연스럽게 wrap */}
+      <div className="flex flex-wrap items-center justify-between gap-y-1.5 mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-sm shrink-0">{icon}</span>
+          <span className="text-xs text-slate-400 shrink-0">{sourceLabel}</span>
+          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 ${badgeClass}`}>
             {note.category}
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <time className="text-xs text-slate-400 shrink-0">{date}</time>
+        <div className="flex items-center gap-2 shrink-0">
+          <time className="text-xs text-slate-400">{date}</time>
           {onDelete && (
             <button
               onClick={handleDelete}

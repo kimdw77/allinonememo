@@ -2,6 +2,8 @@
 
 /**
  * Sidebar.tsx — 좌측 사이드바: 로고, 카테고리 필터, 로그아웃
+ * 모바일: 햄버거로 열고 닫는 드로어 방식
+ * 데스크탑: 항상 고정 표시 (w-60)
  */
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
@@ -10,6 +12,8 @@ interface SidebarProps {
   selected: string;
   onSelect: (category: string) => void;
   noteCount: number;
+  isOpen: boolean;
+  onClose: () => void;
 }
 
 const CATEGORIES = [
@@ -24,7 +28,7 @@ const CATEGORIES = [
   { label: "기타", value: "기타", icon: "📌" },
 ];
 
-export default function Sidebar({ selected, onSelect, noteCount }: SidebarProps) {
+export default function Sidebar({ selected, onSelect, noteCount, isOpen, onClose }: SidebarProps) {
   const router = useRouter();
 
   const handleLogout = async () => {
@@ -34,58 +38,94 @@ export default function Sidebar({ selected, onSelect, noteCount }: SidebarProps)
     router.refresh();
   };
 
+  const handleSelect = (value: string) => {
+    onSelect(value);
+    onClose(); // 모바일에서 카테고리 선택 시 사이드바 닫기
+  };
+
   return (
-    <aside className="fixed top-0 left-0 h-screen w-60 bg-slate-900 flex flex-col z-10">
-      {/* 로고 */}
-      <div className="px-5 py-6 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center text-sm shadow-lg shadow-indigo-500/30">
-            🗄️
+    <>
+      {/* 모바일 오버레이 (사이드바 열릴 때만) */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-20 sm:hidden"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* 사이드바 본체 */}
+      <aside
+        className={`
+          fixed top-0 left-0 h-screen w-60 bg-slate-900 flex flex-col z-30
+          transition-transform duration-300 ease-in-out
+          ${isOpen ? "translate-x-0" : "-translate-x-full"}
+          sm:translate-x-0
+        `}
+      >
+        {/* 로고 */}
+        <div className="px-5 py-6 border-b border-slate-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center text-sm shadow-lg shadow-indigo-500/30">
+                🗄️
+              </div>
+              <div>
+                <h1 className="text-white font-bold text-base leading-none">MyVault</h1>
+                <p className="text-slate-500 text-xs mt-0.5">AI 지식저장소</p>
+              </div>
+            </div>
+            {/* 모바일 닫기 버튼 */}
+            <button
+              onClick={onClose}
+              className="sm:hidden text-slate-500 hover:text-slate-300 transition-colors p-1"
+              aria-label="사이드바 닫기"
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-          <div>
-            <h1 className="text-white font-bold text-base leading-none">MyVault</h1>
-            <p className="text-slate-500 text-xs mt-0.5">AI 지식저장소</p>
+          <div className="mt-3 text-xs text-slate-600">
+            총 {noteCount}개의 노트
           </div>
         </div>
-        <div className="mt-3 text-xs text-slate-600">
-          총 {noteCount}개의 노트
+
+        {/* 카테고리 */}
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
+          <p className="text-xs font-medium text-slate-600 uppercase tracking-wider px-2 mb-2">
+            카테고리
+          </p>
+          <ul className="space-y-0.5">
+            {CATEGORIES.map((cat) => (
+              <li key={cat.value}>
+                <button
+                  onClick={() => handleSelect(cat.value)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-left ${
+                    selected === cat.value
+                      ? "bg-indigo-500/20 text-indigo-400 font-medium"
+                      : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                  }`}
+                >
+                  <span className="text-base w-5 text-center">{cat.icon}</span>
+                  <span>{cat.label}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        {/* 로그아웃 */}
+        <div className="px-3 py-4 border-t border-slate-800">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
+          >
+            <span className="text-base w-5 text-center">🚪</span>
+            <span>로그아웃</span>
+          </button>
         </div>
-      </div>
-
-      {/* 카테고리 */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4">
-        <p className="text-xs font-medium text-slate-600 uppercase tracking-wider px-2 mb-2">
-          카테고리
-        </p>
-        <ul className="space-y-0.5">
-          {CATEGORIES.map((cat) => (
-            <li key={cat.value}>
-              <button
-                onClick={() => onSelect(cat.value)}
-                className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors text-left ${
-                  selected === cat.value
-                    ? "bg-indigo-500/20 text-indigo-400 font-medium"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                }`}
-              >
-                <span className="text-base w-5 text-center">{cat.icon}</span>
-                <span>{cat.label}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </nav>
-
-      {/* 로그아웃 */}
-      <div className="px-3 py-4 border-t border-slate-800">
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-slate-500 hover:bg-slate-800 hover:text-slate-300 transition-colors"
-        >
-          <span className="text-base w-5 text-center">🚪</span>
-          <span>로그아웃</span>
-        </button>
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 }
