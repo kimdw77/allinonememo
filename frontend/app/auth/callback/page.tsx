@@ -14,14 +14,24 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const supabase = createClient();
 
-    // createBrowserClient가 URL 해시의 access_token을 자동으로 감지해 세션 설정
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+    // SIGNED_IN 이벤트 대기 (implicit flow에서 해시 처리 완료 후 발생)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session) {
         router.replace("/");
-      } else {
-        router.replace("/login");
       }
     });
+
+    // 3초 안에 SIGNED_IN이 없으면 로그인 페이지로
+    const timer = setTimeout(() => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session) router.replace("/login");
+      });
+    }, 3000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearTimeout(timer);
+    };
   }, [router]);
 
   return (
