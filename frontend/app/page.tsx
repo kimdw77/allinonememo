@@ -139,7 +139,11 @@ export default function DashboardPage() {
           {!loading && notes.length > 0 && (
             <div className="space-y-3">
               {notes.map((note) => (
-                <NoteCard key={note.id} note={note} />
+                <NoteCard
+                  key={note.id}
+                  note={note}
+                  onDelete={(id) => setNotes((prev) => prev.filter((n) => n.id !== id))}
+                />
               ))}
             </div>
           )}

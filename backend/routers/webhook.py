@@ -9,6 +9,7 @@ from fastapi import APIRouter, Request, Response, HTTPException
 
 from config import settings
 from services.classifier import classify_content
+from services.fetcher import fetch_url_content
 from db.notes import insert_note
 
 logger = logging.getLogger(__name__)
@@ -116,7 +117,15 @@ async def _process_and_save(
     metadata: dict | None = None,
 ) -> None:
     """Claude 분류 후 Supabase 저장 (에러 발생 시 raw_content만 저장)"""
-    classify_result = classify_content(raw_content)
+    # URL이 있으면 본문 크롤링 후 분류에 활용
+    content_for_classify = raw_content
+    if url:
+        fetched = fetch_url_content(url)
+        if fetched:
+            content_for_classify = fetched
+            logger.info("URL 본문 추출 성공: %s (%d자)", url, len(fetched))
+
+    classify_result = classify_content(content_for_classify)
 
     insert_note(
         source=source,
