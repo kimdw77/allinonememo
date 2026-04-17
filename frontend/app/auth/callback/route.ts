@@ -43,6 +43,8 @@ export async function GET(request: NextRequest) {
     if (!error) return response;
   }
 
-  // 실패 시 로그인 페이지로
-  return NextResponse.redirect(new URL("/login", request.url));
+  // 실패 시 로그인 페이지로 (디버그: 파라미터 포함)
+  const debugUrl = new URL("/login", request.url);
+  debugUrl.searchParams.set("debug", `code=${code},token_hash=${token_hash},type=${type}`);
+  return NextResponse.redirect(debugUrl);
 }
