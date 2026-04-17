@@ -1,39 +1,48 @@
 /**
  * app/auth/callback/route.ts — Magic Link 이메일 클릭 후 세션 교환 처리
+ * code(PKCE) 방식과 token_hash(OTP) 방식 모두 지원
  */
 import { createServerClient } from "@supabase/ssr";
+import { type EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
+  const token_hash = searchParams.get("token_hash");
+  const type = searchParams.get("type") as EmailOtpType | null;
 
-  if (code) {
-    // 리다이렉트 응답을 먼저 생성하고 쿠키를 응답에 직접 설정
-    const response = NextResponse.redirect(`${origin}/`);
+  const response = NextResponse.redirect(new URL("/", request.url));
 
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2])
-            );
-          },
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
         },
-      }
-    );
-
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
-      return response;
+        setAll(cookiesToSet: { name: string; value: string; options?: object }[]) {
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options as Parameters<typeof response.cookies.set>[2])
+          );
+        },
+      },
     }
+  );
+
+  // token_hash 방식 (Magic Link 기본)
+  if (token_hash && type) {
+    const { error } = await supabase.auth.verifyOtp({ token_hash, type });
+    if (!error) return response;
   }
 
-  return NextResponse.redirect(`${origin}/login`);
+  // code 방식 (PKCE)
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) return response;
+  }
+
+  // 실패 시 로그인 페이지로
+  return NextResponse.redirect(new URL("/login", request.url));
 }
