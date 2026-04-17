@@ -1,8 +1,8 @@
 "use client";
 
 /**
- * app/auth/callback/page.tsx — Magic Link 클릭 후 세션 처리 (클라이언트)
- * implicit flow: URL 해시에서 access_token을 자동으로 읽어 세션 설정
+ * app/auth/callback/page.tsx — Magic Link 클릭 후 세션 처리
+ * URL 해시에서 access_token을 직접 읽어 세션 설정
  */
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -13,25 +13,34 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const supabase = createClient();
+    const hash = window.location.hash;
 
-    // SIGNED_IN 이벤트 대기 (implicit flow에서 해시 처리 완료 후 발생)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) {
+    if (hash) {
+      // URL 해시에서 토큰 추출 (#access_token=xxx&refresh_token=xxx)
+      const params = new URLSearchParams(hash.slice(1));
+      const access_token = params.get("access_token");
+      const refresh_token = params.get("refresh_token");
+
+      if (access_token && refresh_token) {
+        supabase.auth.setSession({ access_token, refresh_token }).then(({ error }) => {
+          if (!error) {
+            router.replace("/");
+          } else {
+            router.replace("/login");
+          }
+        });
+        return;
+      }
+    }
+
+    // 해시가 없으면 기존 세션 확인
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
         router.replace("/");
+      } else {
+        router.replace("/login");
       }
     });
-
-    // 3초 안에 SIGNED_IN이 없으면 로그인 페이지로
-    const timer = setTimeout(() => {
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (!session) router.replace("/login");
-      });
-    }, 3000);
-
-    return () => {
-      subscription.unsubscribe();
-      clearTimeout(timer);
-    };
   }, [router]);
 
   return (
