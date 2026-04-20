@@ -1,18 +1,24 @@
 "use client";
 
 /**
- * app/login/page.tsx — Magic Link 로그인 페이지
+ * app/login/page.tsx — 이메일 OTP 2단계 로그인 페이지
  */
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 
+type Step = "email" | "otp";
+
 export default function LoginPage() {
+  const router = useRouter();
+  const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
 
-  const handleLogin = async (e: React.FormEvent) => {
+  // 1단계: 이메일로 OTP 코드 발송
+  const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
@@ -20,15 +26,35 @@ export default function LoginPage() {
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { shouldCreateUser: false },
     });
 
     if (error) {
       setError(error.message);
     } else {
-      setSent(true);
+      setStep("otp");
+    }
+    setLoading(false);
+  };
+
+  // 2단계: OTP 코드 입력 → 세션 생성
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token: otp,
+      type: "email",
+    });
+
+    if (error) {
+      setError("코드가 올바르지 않거나 만료되었습니다.");
+    } else {
+      router.push("/");
+      router.refresh();
     }
     setLoading(false);
   };
@@ -47,32 +73,14 @@ export default function LoginPage() {
 
         {/* 카드 */}
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl">
-          {sent ? (
-            /* 이메일 전송 완료 상태 */
-            <div className="text-center">
-              <div className="text-5xl mb-4">📬</div>
-              <h2 className="text-white font-semibold text-lg mb-2">이메일을 확인하세요</h2>
-              <p className="text-slate-400 text-sm leading-relaxed">
-                <span className="text-indigo-400 font-medium">{email}</span>로<br />
-                로그인 링크를 보냈습니다.<br />
-                링크를 클릭하면 자동으로 로그인됩니다.
-              </p>
-              <button
-                onClick={() => setSent(false)}
-                className="mt-6 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-              >
-                다른 이메일로 시도
-              </button>
-            </div>
-          ) : (
-            /* 로그인 폼 */
+          {step === "email" ? (
             <>
               <h2 className="text-white font-semibold text-lg mb-1">로그인</h2>
               <p className="text-slate-400 text-sm mb-6">
-                이메일로 Magic Link를 받아 로그인하세요
+                이메일로 6자리 인증 코드를 받아 로그인하세요
               </p>
 
-              <form onSubmit={handleLogin} className="space-y-4">
+              <form onSubmit={handleSendOtp} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">
                     이메일
@@ -98,7 +106,62 @@ export default function LoginPage() {
                   disabled={loading || !email}
                   className="w-full py-3 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-500/40 disabled:cursor-not-allowed text-white font-medium text-sm rounded-xl transition-colors shadow-lg shadow-indigo-500/20"
                 >
-                  {loading ? "전송 중..." : "Magic Link 받기"}
+                  {loading ? "전송 중..." : "인증 코드 받기"}
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => { setStep("email"); setError(""); setOtp(""); }}
+                className="text-slate-500 hover:text-slate-300 text-xs mb-4 flex items-center gap-1 transition-colors"
+              >
+                ← 이메일 변경
+              </button>
+
+              <h2 className="text-white font-semibold text-lg mb-1">코드 입력</h2>
+              <p className="text-slate-400 text-sm mb-6">
+                <span className="text-indigo-400 font-medium">{email}</span>로<br />
+                보낸 6자리 코드를 입력하세요
+              </p>
+
+              <form onSubmit={handleVerifyOtp} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5">
+                    인증 코드
+                  </label>
+                  <input
+                    type="text"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="123456"
+                    required
+                    maxLength={6}
+                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-600 text-sm text-center tracking-[0.5em] text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+                  />
+                </div>
+
+                {error && (
+                  <p className="text-red-400 text-xs bg-red-400/10 px-3 py-2 rounded-lg">
+                    {error}
+                  </p>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading || otp.length !== 6}
+                  className="w-full py-3 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-500/40 disabled:cursor-not-allowed text-white font-medium text-sm rounded-xl transition-colors shadow-lg shadow-indigo-500/20"
+                >
+                  {loading ? "확인 중..." : "로그인"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSendOtp}
+                  disabled={loading}
+                  className="w-full text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  코드 재전송
                 </button>
               </form>
             </>
