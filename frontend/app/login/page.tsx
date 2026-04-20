@@ -130,10 +130,10 @@ export default function LoginPage() {
                   <input
                     type="text"
                     value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 8))}
                     placeholder="123456"
                     required
-                    maxLength={6}
+                    maxLength={8}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-600 text-sm text-center tracking-[0.5em] text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
                   />
                 </div>
@@ -146,7 +146,7 @@ export default function LoginPage() {
 
                 <button
                   type="submit"
-                  disabled={loading || otp.length !== 6}
+                  disabled={loading || otp.length < 6}
                   className="w-full py-3 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-500/40 disabled:cursor-not-allowed text-white font-medium text-sm rounded-xl transition-colors shadow-lg shadow-indigo-500/20"
                 >
                   {loading ? "확인 중..." : "로그인"}
