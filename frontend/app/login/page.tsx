@@ -24,10 +24,7 @@ export default function LoginPage() {
     setError("");
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: false },
-    });
+    const { error } = await supabase.auth.signInWithOtp({ email });
 
     if (error) {
       setError(error.message);
