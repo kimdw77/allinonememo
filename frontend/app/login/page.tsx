@@ -48,7 +48,7 @@ export default function LoginPage() {
     });
 
     if (error) {
-      setError("코드가 올바르지 않거나 만료되었습니다.");
+      setError(error.message);
     } else {
       router.push("/");
       router.refresh();
