@@ -119,7 +119,7 @@ export default function LoginPage() {
               <h2 className="text-white font-semibold text-lg mb-1">코드 입력</h2>
               <p className="text-slate-400 text-sm mb-6">
                 <span className="text-indigo-400 font-medium">{email}</span>로<br />
-                보낸 6자리 코드를 입력하세요
+                보낸 인증 코드를 입력하세요
               </p>
 
               <form onSubmit={handleVerifyOtp} className="space-y-4">
@@ -131,7 +131,7 @@ export default function LoginPage() {
                     type="text"
                     value={otp}
                     onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                    placeholder="123456"
+                    placeholder="12345678"
                     required
                     maxLength={8}
                     className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-600 text-sm text-center tracking-[0.5em] text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
