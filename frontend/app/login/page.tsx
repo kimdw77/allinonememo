@@ -4,13 +4,11 @@
  * app/login/page.tsx — 이메일 OTP 2단계 로그인 페이지
  */
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase";
 
 type Step = "email" | "otp";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
@@ -50,8 +48,7 @@ export default function LoginPage() {
     if (error) {
       setError(error.message);
     } else {
-      router.push("/");
-      router.refresh();
+      window.location.href = "/";
     }
     setLoading(false);
   };
