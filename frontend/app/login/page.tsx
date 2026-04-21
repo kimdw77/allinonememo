@@ -5,7 +5,6 @@
  */
 import { useState } from "react";
 import { createClient } from "@/lib/supabase";
-import { verifyOtpAction } from "./actions";
 
 type Step = "email" | "otp";
 
@@ -33,18 +32,49 @@ export default function LoginPage() {
     setLoading(false);
   };
 
-  // 2단계: OTP 코드 입력 → 서버에서 검증 (세션 쿠키 보장)
+  // 2단계: OTP 검증 → Route Handler로 세션 쿠키 설정 → 리다이렉트
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    const result = await verifyOtpAction(email, otp);
-    if (result?.error) {
-      setError(result.error);
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token: otp,
+      type: "email",
+    });
+
+    if (error) {
+      setError(error.message);
       setLoading(false);
+      return;
     }
-    // 성공 시 서버 액션 내부에서 redirect("/") 처리
+
+    if (!data.session) {
+      setError("세션을 가져오지 못했습니다. 다시 시도해주세요.");
+      setLoading(false);
+      return;
+    }
+
+    // 서버에서 세션 쿠키 설정 (response.cookies 직접 기록)
+    const res = await fetch("/api/auth/set-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.json();
+      setError(body.error ?? "로그인에 실패했습니다.");
+      setLoading(false);
+      return;
+    }
+
+    window.location.href = "/";
   };
 
   return (
