@@ -55,9 +55,10 @@ def get_notes(
             q = q.eq("category", category)
 
         if query:
-            # 전문 검색: raw_content와 summary에서 검색
+            # 특수문자 이스케이프 후 검색 (PostgREST or_ 인젝션 방지)
+            safe_query = query.replace("%", r"\%").replace("_", r"\_").replace(",", r"\,")
             q = q.or_(
-                f"raw_content.ilike.%{query}%,summary.ilike.%{query}%"
+                f"raw_content.ilike.%{safe_query}%,summary.ilike.%{safe_query}%"
             )
 
         result = q.range(offset, offset + limit - 1).execute()

@@ -2,8 +2,11 @@
 fetcher.py — URL 본문 추출 서비스
 링크를 보내면 해당 페이지의 제목·본문을 가져와 Claude 분류에 사용
 """
+import ipaddress
 import logging
+import socket
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -20,14 +23,49 @@ HEADERS = {
     "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8",
 }
 
+# SSRF 차단: 허용된 스킴만 허용
+_ALLOWED_SCHEMES = {"http", "https"}
+
+
+def _is_private_ip(hostname: str) -> bool:
+    """내부망·루프백·링크로컬 등 SSRF 위험 IP 여부 확인"""
+    try:
+        ip = ipaddress.ip_address(socket.gethostbyname(hostname))
+        return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+    except Exception:
+        return True  # 해석 불가 호스트는 차단
+
+
+def _is_safe_url(url: str) -> bool:
+    """SSRF 공격에 악용될 수 없는 URL인지 검증"""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in _ALLOWED_SCHEMES:
+            return False
+        hostname = parsed.hostname or ""
+        if not hostname:
+            return False
+        return not _is_private_ip(hostname)
+    except Exception:
+        return False
+
 
 def fetch_url_content(url: str) -> Optional[str]:
     """
     URL에서 제목 + 본문 텍스트 추출.
     실패 시 None 반환 (데이터 손실 방지).
     """
+    if not _is_safe_url(url):
+        logger.warning("SSRF 차단: 허용되지 않은 URL — %s", url)
+        return None
+
     try:
-        with httpx.Client(timeout=10, follow_redirects=True, headers=HEADERS) as client:
+        with httpx.Client(
+            timeout=10,
+            follow_redirects=True,
+            headers=HEADERS,
+            max_redirects=3,
+        ) as client:
             response = client.get(url)
             response.raise_for_status()
 

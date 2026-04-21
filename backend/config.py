@@ -16,9 +16,19 @@ class Settings(BaseSettings):
     # Telegram
     TELEGRAM_BOT_TOKEN: str
     TELEGRAM_ALLOWED_USER_ID: str  # 화이트리스트: 나의 Telegram User ID
+    TELEGRAM_WEBHOOK_SECRET: str = ""  # Webhook 서명 검증용 시크릿
 
     # Kakao (선택)
     KAKAO_VERIFY_TOKEN: str = ""
+
+    # API 보안: 백엔드 내부 API 호출에 사용하는 시크릿 키
+    API_SECRET_KEY: str
+
+    # 환경 (production / development)
+    ENV: str = "production"
+
+    # 허용된 프론트엔드 오리진 (쉼표 구분)
+    ALLOWED_ORIGINS: str = "https://allinonememo.vercel.app"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

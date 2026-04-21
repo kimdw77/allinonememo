@@ -3,9 +3,10 @@ routers/rss.py — RSS 구독 관리 API
 """
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, HttpUrl
 
+from dependencies.auth import require_api_key
 from db.subscriptions import (
     get_active_subscriptions,
     insert_subscription,
@@ -14,7 +15,7 @@ from db.subscriptions import (
 from services.rss_fetcher import fetch_all_feeds
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 class SubscribeRequest(BaseModel):

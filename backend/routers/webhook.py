@@ -2,6 +2,8 @@
 routers/webhook.py — 카카오·텔레그램 메시지 수신 처리
 비즈니스 로직 없음: 수신 → services/classifier → db/notes 호출
 """
+import hashlib
+import hmac
 import logging
 from typing import Any
 
@@ -16,6 +18,24 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _verify_telegram_signature(secret: str, body_bytes: bytes, signature_header: str | None) -> bool:
+    """
+    Telegram Webhook 서명 검증.
+    BotFather에서 설정한 secret_token으로 HMAC-SHA256 검증.
+    secret이 설정되지 않은 경우 검증 건너뜀 (하위 호환).
+    """
+    if not secret:
+        return True
+    if not signature_header:
+        return False
+    expected = hmac.new(
+        key=hashlib.sha256(secret.encode()).digest(),
+        msg=body_bytes,
+        digestmod=hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(f"sha256={expected}", signature_header)
+
+
 # ─────────────────────────────────────────
 # 텔레그램 Webhook
 # ─────────────────────────────────────────
@@ -26,8 +46,16 @@ async def telegram_webhook(request: Request) -> Response:
     텔레그램 봇 메시지 수신.
     항상 200 반환 (재시도 루프 방지).
     """
+    # 서명 검증 (TELEGRAM_WEBHOOK_SECRET 설정 시)
+    body_bytes = await request.body()
+    signature = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
+    if not _verify_telegram_signature(settings.TELEGRAM_WEBHOOK_SECRET, body_bytes, signature):
+        logger.warning("Telegram Webhook 서명 검증 실패")
+        return Response(status_code=200)
+
     try:
-        body: dict[str, Any] = await request.json()
+        import json
+        body: dict[str, Any] = json.loads(body_bytes)
     except Exception:
         # 잘못된 JSON도 200 반환
         return Response(status_code=200)

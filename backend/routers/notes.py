@@ -4,20 +4,21 @@ routers/notes.py — 노트 CRUD API
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from dependencies.auth import require_api_key
 from models import NoteCreate, NoteResponse
 from services.classifier import classify_content
 from db.notes import insert_note, get_notes, get_note_by_id, delete_note
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_api_key)])
 
 
 @router.get("", response_model=list[NoteResponse])
 async def list_notes(
-    q: Optional[str] = Query(None, description="키워드 검색"),
-    category: Optional[str] = Query(None, description="카테고리 필터"),
+    q: Optional[str] = Query(None, description="키워드 검색", max_length=200),
+    category: Optional[str] = Query(None, description="카테고리 필터", max_length=50),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
