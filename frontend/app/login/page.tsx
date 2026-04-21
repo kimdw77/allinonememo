@@ -1,49 +1,24 @@
 "use client";
 
 /**
- * app/login/page.tsx — 이메일 OTP 2단계 로그인 페이지
+ * app/login/page.tsx — 이메일+비밀번호 로그인 페이지
  */
 import { useState } from "react";
 import { createClient } from "@/lib/supabase";
 
-type Step = "email" | "otp";
-
 export default function LoginPage() {
-  const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // 1단계: 이메일로 OTP 코드 발송
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({ email });
-
-    if (error) {
-      setError(error.message);
-    } else {
-      setStep("otp");
-    }
-    setLoading(false);
-  };
-
-  // 2단계: OTP 검증 → Route Handler로 세션 쿠키 설정 → 리다이렉트
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.verifyOtp({
-      email,
-      token: otp,
-      type: "email",
-    });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
       setError(error.message);
@@ -57,7 +32,7 @@ export default function LoginPage() {
       return;
     }
 
-    // 서버에서 세션 쿠키 설정 (response.cookies 직접 기록)
+    // 서버에서 세션 쿠키 설정
     const res = await fetch("/api/auth/set-session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -91,104 +66,49 @@ export default function LoginPage() {
 
         {/* 카드 */}
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl">
-          {step === "email" ? (
-            <>
-              <h2 className="text-white font-semibold text-lg mb-1">로그인</h2>
-              <p className="text-slate-400 text-sm mb-6">
-                이메일로 6자리 인증 코드를 받아 로그인하세요
-              </p>
+          <h2 className="text-white font-semibold text-lg mb-1">로그인</h2>
+          <p className="text-slate-400 text-sm mb-6">이메일과 비밀번호를 입력하세요</p>
 
-              <form onSubmit={handleSendOtp} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">
-                    이메일
-                  </label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    required
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                  />
-                </div>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">이메일</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+              />
+            </div>
 
-                {error && (
-                  <p className="text-red-400 text-xs bg-red-400/10 px-3 py-2 rounded-lg">
-                    {error}
-                  </p>
-                )}
+            <div>
+              <label className="block text-xs font-medium text-slate-400 mb-1.5">비밀번호</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-600 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
+              />
+            </div>
 
-                <button
-                  type="submit"
-                  disabled={loading || !email}
-                  className="w-full py-3 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-500/40 disabled:cursor-not-allowed text-white font-medium text-sm rounded-xl transition-colors shadow-lg shadow-indigo-500/20"
-                >
-                  {loading ? "전송 중..." : "인증 코드 받기"}
-                </button>
-              </form>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => { setStep("email"); setError(""); setOtp(""); }}
-                className="text-slate-500 hover:text-slate-300 text-xs mb-4 flex items-center gap-1 transition-colors"
-              >
-                ← 이메일 변경
-              </button>
+            {error && (
+              <p className="text-red-400 text-xs bg-red-400/10 px-3 py-2 rounded-lg">{error}</p>
+            )}
 
-              <h2 className="text-white font-semibold text-lg mb-1">코드 입력</h2>
-              <p className="text-slate-400 text-sm mb-6">
-                <span className="text-indigo-400 font-medium">{email}</span>로<br />
-                보낸 인증 코드를 입력하세요
-              </p>
-
-              <form onSubmit={handleVerifyOtp} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">
-                    인증 코드
-                  </label>
-                  <input
-                    type="text"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 8))}
-                    placeholder="12345678"
-                    required
-                    maxLength={8}
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-slate-600 text-sm text-center tracking-[0.5em] text-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all"
-                  />
-                </div>
-
-                {error && (
-                  <p className="text-red-400 text-xs bg-red-400/10 px-3 py-2 rounded-lg">
-                    {error}
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={loading || otp.length < 6}
-                  className="w-full py-3 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-500/40 disabled:cursor-not-allowed text-white font-medium text-sm rounded-xl transition-colors shadow-lg shadow-indigo-500/20"
-                >
-                  {loading ? "확인 중..." : "로그인"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSendOtp}
-                  disabled={loading}
-                  className="w-full text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                >
-                  코드 재전송
-                </button>
-              </form>
-            </>
-          )}
+            <button
+              type="submit"
+              disabled={loading || !email || !password}
+              className="w-full py-3 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-500/40 disabled:cursor-not-allowed text-white font-medium text-sm rounded-xl transition-colors shadow-lg shadow-indigo-500/20"
+            >
+              {loading ? "로그인 중..." : "로그인"}
+            </button>
+          </form>
         </div>
 
-        <p className="text-center text-slate-600 text-xs mt-6">
-          개인 전용 서비스입니다
-        </p>
+        <p className="text-center text-slate-600 text-xs mt-6">개인 전용 서비스입니다</p>
       </div>
     </div>
   );
