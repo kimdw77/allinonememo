@@ -85,7 +85,7 @@ async def telegram_webhook(request: Request) -> Response:
             url = text[offset: offset + length]
             break
 
-    # Claude로 분류 후 Supabase 저장 (비동기 처리를 위해 백그라운드 태스크 사용)
+    # TODO(phase4): 일정 감지 → Google Calendar 자동 등록
     await _process_and_save(
         source="telegram",
         raw_content=text,

@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address)
 
 # 프로덕션에서는 API 문서 비활성화
-_docs_url = None if settings.ENV == "production" else "/docs"
-_redoc_url = None if settings.ENV == "production" else "/redoc"
+_docs_url = None if settings.APP_ENV == "production" else "/docs"
+_redoc_url = None if settings.APP_ENV == "production" else "/redoc"
 
 app = FastAPI(
     title="MyVault API",
@@ -27,7 +27,7 @@ app = FastAPI(
     version="0.1.0",
     docs_url=_docs_url,
     redoc_url=_redoc_url,
-    openapi_url=None if settings.ENV == "production" else "/openapi.json",
+    openapi_url=None if settings.APP_ENV == "production" else "/openapi.json",
 )
 
 app.state.limiter = limiter
@@ -35,7 +35,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS 설정 — 명시적 도메인만 허용 (와일드카드 금지)
 _allowed_origins = [o.strip() for o in settings.ALLOWED_ORIGINS.split(",") if o.strip()]
-if settings.ENV != "production":
+if settings.APP_ENV != "production":
     _allowed_origins.append("http://localhost:3000")
 
 app.add_middleware(

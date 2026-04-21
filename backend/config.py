@@ -21,11 +21,14 @@ class Settings(BaseSettings):
     # Kakao (선택)
     KAKAO_VERIFY_TOKEN: str = ""
 
+    # TODO(phase4): Google Calendar 연동
+    # GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, GOOGLE_CALENDAR_ID
+
     # API 보안: 백엔드 내부 API 호출에 사용하는 시크릿 키
     API_SECRET_KEY: str
 
-    # 환경 (production / development)
-    ENV: str = "production"
+    # 환경 (production / development) — ENV 대신 APP_ENV 사용 (Railway ENV 예약어 충돌 방지)
+    APP_ENV: str = "production"
 
     # 허용된 프론트엔드 오리진 (쉼표 구분)
     ALLOWED_ORIGINS: str = "https://allinonememo.vercel.app"
