@@ -9,6 +9,8 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+from apscheduler.schedulers.background import BackgroundScheduler
+
 from config import settings
 from routers import webhook, notes, rss, categories
 
