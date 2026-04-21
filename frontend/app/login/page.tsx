@@ -5,6 +5,7 @@
  */
 import { useState } from "react";
 import { createClient } from "@/lib/supabase";
+import { verifyOtpAction } from "./actions";
 
 type Step = "email" | "otp";
 
@@ -32,25 +33,18 @@ export default function LoginPage() {
     setLoading(false);
   };
 
-  // 2단계: OTP 코드 입력 → 세션 생성
+  // 2단계: OTP 코드 입력 → 서버에서 검증 (세션 쿠키 보장)
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    const supabase = createClient();
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token: otp,
-      type: "email",
-    });
-
-    if (error) {
-      setError(error.message);
-    } else {
-      window.location.href = "/";
+    const result = await verifyOtpAction(email, otp);
+    if (result?.error) {
+      setError(result.error);
+      setLoading(false);
     }
-    setLoading(false);
+    // 성공 시 서버 액션 내부에서 redirect("/") 처리
   };
 
   return (
