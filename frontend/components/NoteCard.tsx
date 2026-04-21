@@ -10,6 +10,7 @@ interface NoteCardProps {
     source: string;
     raw_content: string;
     summary: string;
+    highlights?: string[];
     keywords: string[];
     category: string;
     content_type: string;
@@ -117,6 +118,21 @@ export default function NoteCard({ note, onDelete }: NoteCardProps) {
             ? note.raw_content.slice(0, 120) + "..."
             : note.raw_content}
         </p>
+      )}
+
+      {/* 하이라이트 — 형광펜 스타일 */}
+      {note.highlights && note.highlights.length > 0 && (
+        <div className="mb-3 space-y-1.5">
+          {note.highlights.map((hl, i) => (
+            <p
+              key={i}
+              className="text-sm text-slate-700 leading-relaxed px-2 py-1 rounded"
+              style={{ background: "linear-gradient(120deg, #fef08a 0%, #fef9c3 100%)" }}
+            >
+              {hl}
+            </p>
+          ))}
+        </div>
       )}
 
       {/* URL */}

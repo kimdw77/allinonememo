@@ -159,6 +159,7 @@ async def _process_and_save(
         source=source,
         raw_content=raw_content,
         summary=classify_result.get("summary", ""),
+        highlights=classify_result.get("highlights", []),
         keywords=classify_result.get("keywords", []),
         category=classify_result.get("category", "기타"),
         content_type=classify_result.get("content_type", "other"),

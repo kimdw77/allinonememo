@@ -13,6 +13,7 @@ interface Note {
   source: string;
   raw_content: string;
   summary: string;
+  highlights?: string[];
   keywords: string[];
   category: string;
   content_type: string;

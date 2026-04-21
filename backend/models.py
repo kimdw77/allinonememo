@@ -18,6 +18,7 @@ class NoteResponse(BaseModel):
     source: str
     raw_content: str
     summary: Optional[str] = None
+    highlights: Optional[list[str]] = None
     keywords: Optional[list[str]] = None
     category: Optional[str] = None
     content_type: Optional[str] = None

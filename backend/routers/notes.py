@@ -44,6 +44,7 @@ async def create_note(body: NoteCreate):
         source=body.source or "manual",
         raw_content=body.raw_content,
         summary=classify_result.get("summary", ""),
+        highlights=classify_result.get("highlights", []),
         keywords=classify_result.get("keywords", []),
         category=classify_result.get("category", "기타"),
         content_type=classify_result.get("content_type", "other"),
