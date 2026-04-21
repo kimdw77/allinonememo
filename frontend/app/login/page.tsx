@@ -4,7 +4,6 @@
  * app/login/page.tsx — 이메일+비밀번호 로그인 페이지
  */
 import { useState } from "react";
-import { createClient } from "@/lib/supabase";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -17,29 +16,10 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-      return;
-    }
-
-    if (!data.session) {
-      setError("세션을 가져오지 못했습니다. 다시 시도해주세요.");
-      setLoading(false);
-      return;
-    }
-
-    // 서버에서 세션 쿠키 설정
-    const res = await fetch("/api/auth/set-session", {
+    const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
-      }),
+      body: JSON.stringify({ email, password }),
     });
 
     if (!res.ok) {
@@ -55,7 +35,6 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* 로고 */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center justify-center w-14 h-14 bg-indigo-500 rounded-2xl mb-4 shadow-lg shadow-indigo-500/30">
             <span className="text-2xl">🗄️</span>
@@ -64,7 +43,6 @@ export default function LoginPage() {
           <p className="text-slate-400 mt-1 text-sm">나만의 AI 지식저장소</p>
         </div>
 
-        {/* 카드 */}
         <div className="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8 shadow-2xl">
           <h2 className="text-white font-semibold text-lg mb-1">로그인</h2>
           <p className="text-slate-400 text-sm mb-6">이메일과 비밀번호를 입력하세요</p>
