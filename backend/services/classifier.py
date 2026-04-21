@@ -43,15 +43,25 @@ def classify_content(content: str) -> dict:
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=300,  # JSON 응답이므로 충분
+            max_tokens=500,
             messages=[{
                 "role": "user",
                 "content": CLASSIFY_PROMPT.format(content=truncated),
             }],
         )
-        result = json.loads(response.content[0].text)
 
-        # 필수 키 검증
+        raw = response.content[0].text if response.content else ""
+        logger.info("Claude 원본 응답: %s", raw[:200])
+
+        # 코드블록 제거 후 JSON 추출
+        import re
+        cleaned = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if not match:
+            logger.error("Claude 응답에서 JSON 추출 실패. 원본: %s", raw[:200])
+            return _FALLBACK.copy()
+
+        result = json.loads(match.group())
         return {
             "summary": result.get("summary", ""),
             "keywords": result.get("keywords", []),
