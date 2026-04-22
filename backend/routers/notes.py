@@ -26,15 +26,6 @@ async def list_notes(
     return get_notes(query=q, category=category, limit=limit, offset=offset)
 
 
-@router.get("/{note_id}", response_model=NoteResponse)
-async def get_note(note_id: str):
-    """노트 단건 조회"""
-    note = get_note_by_id(note_id)
-    if not note:
-        raise HTTPException(status_code=404, detail="노트를 찾을 수 없습니다")
-    return note
-
-
 @router.post("", response_model=NoteResponse, status_code=201)
 async def create_note(body: NoteCreate):
     """수동 노트 추가 (Claude 분류 포함)"""
@@ -57,16 +48,11 @@ async def create_note(body: NoteCreate):
     return note
 
 
+# 고정 경로는 반드시 /{note_id} 앞에 위치해야 FastAPI가 올바르게 라우팅함
 @router.get("/graph")
 async def graph_data(limit: int = Query(200, ge=10, le=500)):
     """그래프 시각화용 노드·엣지 데이터 반환"""
     return get_graph_data(limit=limit)
-
-
-@router.get("/{note_id}/related", response_model=list[NoteResponse])
-async def related_notes(note_id: str, limit: int = Query(5, ge=1, le=20)):
-    """키워드 기반 연관 노트 조회"""
-    return get_related_notes(note_id=note_id, limit=limit)
 
 
 @router.get("/search/vector", response_model=list[NoteResponse])
@@ -82,15 +68,28 @@ async def semantic_search(
     from config import settings
 
     if not settings.VOYAGE_API_KEY:
-        # 벡터 검색 불가 시 일반 검색으로 폴백
         return get_notes(query=q, limit=limit)
 
     query_vector = embed_query(q)
     if query_vector is None:
         return get_notes(query=q, limit=limit)
 
-    results = vector_search_notes(query_vector=query_vector, limit=limit)
-    return results
+    return vector_search_notes(query_vector=query_vector, limit=limit)
+
+
+@router.get("/{note_id}", response_model=NoteResponse)
+async def get_note(note_id: str):
+    """노트 단건 조회"""
+    note = get_note_by_id(note_id)
+    if not note:
+        raise HTTPException(status_code=404, detail="노트를 찾을 수 없습니다")
+    return note
+
+
+@router.get("/{note_id}/related", response_model=list[NoteResponse])
+async def related_notes(note_id: str, limit: int = Query(5, ge=1, le=20)):
+    """키워드 기반 연관 노트 조회"""
+    return get_related_notes(note_id=note_id, limit=limit)
 
 
 @router.delete("/{note_id}", status_code=204)
