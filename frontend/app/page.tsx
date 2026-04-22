@@ -46,6 +46,8 @@ export default function DashboardPage() {
   const [dupPairs, setDupPairs] = useState<DupPair[]>([]);
   const [dupLoading, setDupLoading] = useState(false);
   const [mergingId, setMergingId] = useState<string | null>(null);
+  const [reclassifying, setReclassifying] = useState(false);
+  const [reclassifyResult, setReclassifyResult] = useState<string>("");
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const offsetRef = useRef(0);
@@ -96,6 +98,32 @@ export default function DashboardPage() {
     observer.observe(el);
     return () => observer.disconnect();
   }, [hasMore, loading, loadNotes]);
+
+  // ─── 일괄 재분류 ──────────────────────────────
+
+  const bulkReclassify = async () => {
+    setReclassifying(true);
+    setReclassifyResult("");
+    try {
+      const res = await fetch("/api/notes/bulk-reclassify?category_filter=기타&limit=50", {
+        method: "POST",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReclassifyResult(`✅ ${data.reclassified}개 재분류 완료`);
+        // 목록 새로고침
+        offsetRef.current = 0;
+        setNotes([]);
+        setHasMore(true);
+        loadNotes(true);
+      } else {
+        setReclassifyResult("❌ 재분류 실패");
+      }
+    } catch {
+      setReclassifyResult("❌ 네트워크 오류");
+    }
+    setReclassifying(false);
+  };
 
   // ─── 중복 감지 ────────────────────────────────
 
@@ -176,6 +204,16 @@ export default function DashboardPage() {
               title="파일 업로드 (아이폰 노트 등)"
             >
               📁
+            </button>
+
+            {/* 일괄 재분류 */}
+            <button
+              onClick={bulkReclassify}
+              disabled={reclassifying}
+              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-emerald-500 hover:border-emerald-300 transition-colors shadow-sm shrink-0 text-base disabled:opacity-50"
+              title={reclassifyResult || "기타 카테고리 노트 일괄 재분류"}
+            >
+              {reclassifying ? "⏳" : "🔄"}
             </button>
 
             {/* 중복 감지 */}

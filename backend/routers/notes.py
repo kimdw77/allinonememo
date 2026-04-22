@@ -49,6 +49,41 @@ async def create_note(body: NoteCreate):
 
 
 # ─────────────────────────────────────────
+# 일괄 재분류
+# ─────────────────────────────────────────
+
+@router.post("/bulk-reclassify")
+async def bulk_reclassify(
+    category_filter: Optional[str] = Query("기타", description="재분류할 카테고리 (기본: 기타, 'all'이면 전체)"),
+    limit: int = Query(50, ge=1, le=200, description="한 번에 처리할 최대 노트 수"),
+):
+    """
+    지정한 카테고리의 노트를 Claude로 일괄 재분류.
+    기본값: '기타' 카테고리만 대상. 'all'이면 전체 재분류.
+    Claude API 호출이 노트 수만큼 발생하므로 limit로 범위 제한.
+    """
+    cat = None if category_filter == "all" else category_filter
+    notes = get_notes(category=cat, limit=limit, offset=0)
+
+    ok, failed = 0, 0
+    for note in notes:
+        result = classify_content(note["raw_content"])
+        updated = update_note(note["id"], {
+            "summary": result.get("summary", ""),
+            "highlights": result.get("highlights", []),
+            "keywords": result.get("keywords", []),
+            "category": result.get("category", "기타"),
+            "content_type": result.get("content_type", "other"),
+        })
+        if updated:
+            ok += 1
+        else:
+            failed += 1
+
+    return {"reclassified": ok, "failed": failed, "total": len(notes)}
+
+
+# ─────────────────────────────────────────
 # 파일 업로드 (아이폰 노트 등)
 # ─────────────────────────────────────────
 
