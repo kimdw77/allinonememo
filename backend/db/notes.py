@@ -115,35 +115,43 @@ def vector_search_notes(query_vector: list[float], limit: int = 10) -> list[dict
 
 def get_related_notes(note_id: str, limit: int = 5) -> list[dict]:
     """
-    키워드 겹침 기반 연관 노트 조회.
-    같은 카테고리 + 공통 키워드가 많은 순으로 반환.
+    연관 노트 조회. 벡터 임베딩 있으면 코사인 유사도 우선, 없으면 키워드 겹침 폴백.
     """
     try:
         db = get_db()
-        # 기준 노트 조회
-        base = db.table("notes").select("keywords,category").eq("id", note_id).single().execute()
+        base = db.table("notes").select("keywords,category,embedding").eq("id", note_id).single().execute()
         if not base.data:
             return []
 
+        # 벡터 유사도 검색 (임베딩이 있을 때)
+        embedding = base.data.get("embedding")
+        if embedding:
+            try:
+                result = db.rpc("match_notes", {
+                    "query_embedding": embedding,
+                    "match_count": limit + 1,
+                }).execute()
+                notes = [n for n in (result.data or []) if n.get("id") != note_id]
+                if notes:
+                    return notes[:limit]
+            except Exception:
+                pass  # 벡터 검색 실패 시 키워드 폴백
+
+        # 키워드 겹침 폴백
         keywords = base.data.get("keywords") or []
         category = base.data.get("category", "")
 
         if not keywords:
-            # 키워드 없으면 같은 카테고리 노트 반환
             result = db.table("notes").select(
                 "id,summary,keywords,category,content_type,url,created_at"
             ).eq("category", category).neq("id", note_id).limit(limit).execute()
             return result.data or []
 
-        # 키워드 배열 중 하나라도 겹치는 노트 조회 (PostgreSQL @> 연산자)
-        # PostgREST: keywords 배열에 any 매칭
         result = db.table("notes").select(
             "id,summary,keywords,category,content_type,url,created_at"
         ).neq("id", note_id).overlaps("keywords", keywords).limit(limit * 3).execute()
 
         notes = result.data or []
-
-        # 공통 키워드 수로 정렬
         keyword_set = set(keywords)
         scored = sorted(
             notes,
@@ -154,6 +162,56 @@ def get_related_notes(note_id: str, limit: int = 5) -> list[dict]:
 
     except Exception as e:
         logger.error("연관 노트 조회 실패 (id=%s): %s", note_id, e)
+        return []
+
+
+def get_top_keywords(limit: int = 50) -> list[str]:
+    """전체 노트에서 사용 빈도 높은 키워드 목록 반환 (자동완성용)"""
+    try:
+        db = get_db()
+        result = db.table("notes").select("keywords").execute()
+        freq: dict[str, int] = {}
+        for row in (result.data or []):
+            for kw in (row.get("keywords") or []):
+                if kw:
+                    freq[kw] = freq.get(kw, 0) + 1
+        sorted_kw = sorted(freq, key=lambda k: -freq[k])
+        return sorted_kw[:limit]
+    except Exception as e:
+        logger.error("키워드 목록 조회 실패: %s", e)
+        return []
+
+
+def bulk_delete_notes(note_ids: list[str]) -> int:
+    """여러 노트 일괄 삭제. 삭제된 수 반환."""
+    if not note_ids:
+        return 0
+    try:
+        db = get_db()
+        db.table("notes").delete().in_("id", note_ids).execute()
+        return len(note_ids)
+    except Exception as e:
+        logger.error("노트 일괄 삭제 실패: %s", e)
+        return 0
+
+
+def export_notes(
+    category: Optional[str] = None,
+    note_ids: Optional[list[str]] = None,
+    limit: int = 1000,
+) -> list[dict]:
+    """내보내기용 노트 전체 조회"""
+    try:
+        db = get_db()
+        q = db.table("notes").select("*").order("created_at", desc=True)
+        if note_ids:
+            q = q.in_("id", note_ids)
+        elif category:
+            q = q.eq("category", category)
+        result = q.limit(limit).execute()
+        return result.data or []
+    except Exception as e:
+        logger.error("노트 내보내기 조회 실패: %s", e)
         return []
 
 

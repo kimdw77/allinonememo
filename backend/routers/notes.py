@@ -8,8 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 
 from dependencies.auth import require_api_key
 from models import NoteCreate, NoteUpdate, NoteResponse
-from services.classifier import classify_content
-from db.notes import insert_note, update_note, get_notes, get_note_by_id, delete_note, vector_search_notes, get_related_notes, get_graph_data, get_duplicates, merge_notes
+from services.classifier import classify_content, analyze_image
+from db.notes import (
+    insert_note, update_note, get_notes, get_note_by_id, delete_note,
+    vector_search_notes, get_related_notes, get_graph_data,
+    get_duplicates, merge_notes, get_top_keywords, bulk_delete_notes, export_notes,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_api_key)])
@@ -88,6 +92,11 @@ async def bulk_reclassify(
 # ─────────────────────────────────────────
 
 ALLOWED_EXTENSIONS = {".txt", ".md", ".text", ".pdf", ".docx", ".doc"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+IMAGE_MEDIA_TYPES = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    ".png": "image/png", ".gif": "image/gif", ".webp": "image/webp",
+}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 
@@ -111,7 +120,8 @@ async def upload_files(files: list[UploadFile] = File(...)):
         filename = upload.filename or "unknown"
         ext = Path(filename).suffix.lower()
 
-        if ext not in ALLOWED_EXTENSIONS:
+        is_image = ext in IMAGE_EXTENSIONS
+        if ext not in ALLOWED_EXTENSIONS and not is_image:
             errors.append(f"{filename}: 지원하지 않는 형식 ({ext})")
             continue
 
@@ -120,21 +130,29 @@ async def upload_files(files: list[UploadFile] = File(...)):
             errors.append(f"{filename}: 파일 크기 초과 (최대 10MB)")
             continue
 
-        text = extract_text(filename, content)
-        if not text.strip():
-            errors.append(f"{filename}: 텍스트를 추출할 수 없습니다")
-            continue
+        if is_image:
+            # Claude Vision으로 OCR + 분류
+            media_type = IMAGE_MEDIA_TYPES.get(ext, "image/jpeg")
+            classify_result = analyze_image(content, media_type)
+            ocr_text = classify_result.pop("ocr_text", "")
+            raw_content = ocr_text or f"[이미지 파일: {filename}]"
+        else:
+            text = extract_text(filename, content)
+            if not text.strip():
+                errors.append(f"{filename}: 텍스트를 추출할 수 없습니다")
+                continue
+            classify_result = classify_content(text)
+            raw_content = text
 
-        classify_result = classify_content(text)
         note = insert_note(
             source="upload",
-            raw_content=text,
+            raw_content=raw_content,
             summary=classify_result.get("summary", ""),
             highlights=classify_result.get("highlights", []),
             keywords=classify_result.get("keywords", []),
             category=classify_result.get("category", "기타"),
             content_type=classify_result.get("content_type", "other"),
-            metadata={"original_filename": filename, "file_ext": ext},
+            metadata={"original_filename": filename, "file_ext": ext, "is_image": is_image},
         )
         if note:
             created.append(note)
@@ -165,6 +183,78 @@ async def merge_two_notes(keep_id: str, remove_id: str):
     if not result:
         raise HTTPException(status_code=404, detail="노트를 찾을 수 없거나 병합 실패")
     return result
+
+
+# ─────────────────────────────────────────
+# 키워드 자동완성
+# ─────────────────────────────────────────
+
+@router.get("/keywords")
+async def keywords_autocomplete(limit: int = Query(50, ge=1, le=200)):
+    """전체 노트 키워드 빈도 순 목록 (검색 자동완성용)"""
+    return get_top_keywords(limit=limit)
+
+
+# ─────────────────────────────────────────
+# 일괄 삭제
+# ─────────────────────────────────────────
+
+@router.post("/bulk-delete")
+async def bulk_delete(note_ids: list[str]):
+    """여러 노트 일괄 삭제. 삭제된 수 반환."""
+    if not note_ids:
+        raise HTTPException(status_code=400, detail="삭제할 노트 ID를 전달하세요")
+    if len(note_ids) > 200:
+        raise HTTPException(status_code=400, detail="한 번에 최대 200개까지 삭제 가능합니다")
+    deleted = bulk_delete_notes(note_ids)
+    return {"deleted": deleted}
+
+
+# ─────────────────────────────────────────
+# 내보내기
+# ─────────────────────────────────────────
+
+@router.get("/export")
+async def export(
+    fmt: str = Query("json", description="출력 형식: json | markdown"),
+    category: Optional[str] = Query(None),
+    ids: Optional[str] = Query(None, description="콤마 구분 note ID 목록"),
+    limit: int = Query(1000, ge=1, le=5000),
+):
+    """노트 내보내기 (JSON 또는 Markdown)"""
+    from fastapi.responses import Response
+
+    note_ids = [i.strip() for i in ids.split(",")] if ids else None
+    notes = export_notes(category=category, note_ids=note_ids, limit=limit)
+
+    if fmt == "markdown":
+        lines: list[str] = ["# MyVault 노트 내보내기\n"]
+        for n in notes:
+            lines.append(f"## {n.get('summary', '(요약 없음)')}")
+            lines.append(f"- **카테고리**: {n.get('category', '')}")
+            lines.append(f"- **날짜**: {n.get('created_at', '')[:10]}")
+            kw = n.get("keywords") or []
+            if kw:
+                lines.append(f"- **키워드**: {', '.join(kw)}")
+            if n.get("url"):
+                lines.append(f"- **URL**: {n['url']}")
+            lines.append(f"\n{n.get('raw_content', '')}\n")
+            lines.append("---\n")
+        md = "\n".join(lines)
+        return Response(
+            content=md.encode("utf-8"),
+            media_type="text/markdown; charset=utf-8",
+            headers={"Content-Disposition": "attachment; filename=myvault_notes.md"},
+        )
+
+    # JSON 기본
+    import json as json_mod
+    from fastapi.responses import Response as Resp
+    return Resp(
+        content=json_mod.dumps(notes, ensure_ascii=False, default=str).encode("utf-8"),
+        media_type="application/json; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=myvault_notes.json"},
+    )
 
 
 # 고정 경로는 반드시 /{note_id} 앞에 위치해야 FastAPI가 올바르게 라우팅함

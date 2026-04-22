@@ -2,7 +2,7 @@
 
 /**
  * app/page.tsx — 메인 대시보드
- * 무한 스크롤 + 파일 업로드 + 중복 감지 패널
+ * 무한 스크롤 + 파일 업로드 + 중복 감지 + 핀 고정 + 다중선택 + 자동완성 + 내보내기
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import NoteCard from "@/components/NoteCard";
@@ -31,6 +31,18 @@ interface DupPair {
 }
 
 const PAGE_SIZE = 20;
+const PIN_KEY = "myvault_pinned_ids";
+
+function loadPinnedIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PIN_KEY);
+    return raw ? new Set<string>(JSON.parse(raw)) : new Set<string>();
+  } catch { return new Set(); }
+}
+
+function savePinnedIds(ids: Set<string>) {
+  localStorage.setItem(PIN_KEY, JSON.stringify(Array.from(ids)));
+}
 
 export default function DashboardPage() {
   const [notes, setNotes] = useState<Note[]>([]);
@@ -39,6 +51,23 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // 핀 고정
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set());
+
+  // 다중 선택
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  // 검색 자동완성
+  const [allKeywords, setAllKeywords] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+  // 내보내기
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // 모달 상태
   const [showUpload, setShowUpload] = useState(false);
@@ -51,6 +80,111 @@ export default function DashboardPage() {
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const offsetRef = useRef(0);
+
+  // localStorage에서 핀 초기화
+  useEffect(() => {
+    setPinnedIds(loadPinnedIds());
+  }, []);
+
+  // 키워드 자동완성 미리 로드
+  useEffect(() => {
+    fetch("/api/notes/keywords?limit=100")
+      .then((r) => r.ok ? r.json() : [])
+      .then((kws: string[]) => setAllKeywords(kws))
+      .catch(() => {});
+  }, []);
+
+  // 외부 클릭 시 자동완성 닫기
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // ─── 핀 고정 ──────────────────────────────
+
+  const togglePin = (id: string) => {
+    setPinnedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      savePinnedIds(next);
+      return next;
+    });
+  };
+
+  // 핀된 노트를 상단으로
+  const sortedNotes = [
+    ...notes.filter((n) => pinnedIds.has(n.id)),
+    ...notes.filter((n) => !pinnedIds.has(n.id)),
+  ];
+
+  // ─── 다중 선택 ────────────────────────────
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const bulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`선택한 ${selectedIds.size}개 노트를 삭제하시겠습니까?`)) return;
+    setBulkDeleting(true);
+    try {
+      const res = await fetch("/api/notes/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Array.from(selectedIds)),
+      });
+      if (res.ok) {
+        const ids = new Set(selectedIds);
+        setNotes((prev) => prev.filter((n) => !ids.has(n.id)));
+        setPinnedIds((prev) => {
+          const next = new Set(prev);
+          ids.forEach((id) => next.delete(id));
+          savePinnedIds(next);
+          return next;
+        });
+        exitSelectMode();
+      }
+    } catch { /* ignore */ }
+    setBulkDeleting(false);
+  };
+
+  // ─── 내보내기 ─────────────────────────────
+
+  const doExport = async (fmt: "json" | "markdown") => {
+    setExporting(true);
+    setShowExportMenu(false);
+    try {
+      const params = new URLSearchParams({ fmt });
+      if (category) params.set("category", category);
+      if (selectMode && selectedIds.size > 0) params.set("ids", Array.from(selectedIds).join(","));
+      const res = await fetch(`/api/notes/export?${params.toString()}`);
+      if (!res.ok) { setExporting(false); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fmt === "markdown" ? "myvault_notes.md" : "myvault_notes.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch { /* ignore */ }
+    setExporting(false);
+  };
 
   // ─── 데이터 로드 ───────────────────────────────
 
@@ -111,7 +245,6 @@ export default function DashboardPage() {
       if (res.ok) {
         const data = await res.json();
         setReclassifyResult(`✅ ${data.reclassified}개 재분류 완료`);
-        // 목록 새로고침
         offsetRef.current = 0;
         setNotes([]);
         setHasMore(true);
@@ -158,6 +291,11 @@ export default function DashboardPage() {
     setMergingId(null);
   };
 
+  // 자동완성 필터
+  const suggestions = query.length >= 1
+    ? allKeywords.filter((k) => k.toLowerCase().includes(query.toLowerCase())).slice(0, 8)
+    : [];
+
   // ─── 렌더링 ──────────────────────────────────
 
   return (
@@ -185,25 +323,82 @@ export default function DashboardPage() {
               </svg>
             </button>
 
-            {/* 검색 */}
-            <div className="relative flex-1">
+            {/* 검색 + 자동완성 */}
+            <div className="relative flex-1" ref={searchRef}>
               <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
+                onFocus={() => setShowSuggestions(true)}
                 placeholder="메모·요약·키워드 검색..."
                 className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent shadow-sm"
               />
+              {/* 자동완성 드롭다운 */}
+              {showSuggestions && suggestions.length > 0 && (
+                <ul className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 overflow-hidden">
+                  {suggestions.map((kw) => (
+                    <li key={kw}>
+                      <button
+                        onMouseDown={(e) => { e.preventDefault(); setQuery(kw); setShowSuggestions(false); }}
+                        className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                      >
+                        <span className="text-slate-400 mr-2">🏷</span>{kw}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* 파일 업로드 */}
             <button
               onClick={() => setShowUpload(true)}
               className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0 text-base"
-              title="파일 업로드 (아이폰 노트 등)"
+              title="파일·이미지 업로드"
             >
               📁
+            </button>
+
+            {/* 내보내기 */}
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setShowExportMenu((v) => !v)}
+                disabled={exporting}
+                className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-violet-500 hover:border-violet-300 transition-colors shadow-sm text-base disabled:opacity-50"
+                title="노트 내보내기"
+              >
+                {exporting ? "⏳" : "📤"}
+              </button>
+              {showExportMenu && (
+                <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 overflow-hidden w-40">
+                  <button
+                    onClick={() => doExport("json")}
+                    className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    📄 JSON 내보내기
+                  </button>
+                  <button
+                    onClick={() => doExport("markdown")}
+                    className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    📝 Markdown 내보내기
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* 다중 선택 모드 토글 */}
+            <button
+              onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
+              className={`p-2.5 rounded-xl border transition-colors shadow-sm shrink-0 text-base ${
+                selectMode
+                  ? "border-indigo-400 bg-indigo-50 text-indigo-600"
+                  : "border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300"
+              }`}
+              title={selectMode ? "선택 모드 종료" : "다중 선택"}
+            >
+              ☑️
             </button>
 
             {/* 일괄 재분류 */}
@@ -245,7 +440,12 @@ export default function DashboardPage() {
             <h2 className="text-slate-700 font-semibold text-base">
               {category ? category : "전체 노트"}
             </h2>
-            {!loading && <span className="text-xs text-slate-400">{notes.length}개</span>}
+            <div className="flex items-center gap-2">
+              {selectMode && selectedIds.size > 0 && (
+                <span className="text-xs text-indigo-600 font-medium">{selectedIds.size}개 선택됨</span>
+              )}
+              {!loading && <span className="text-xs text-slate-400">{notes.length}개</span>}
+            </div>
           </div>
 
           {/* 첫 로딩 스피너 */}
@@ -271,13 +471,54 @@ export default function DashboardPage() {
 
           {/* 카드 목록 */}
           <div className="space-y-3">
-            {notes.map((note) => (
-              <NoteCard
-                key={note.id}
-                note={note}
-                onDelete={(id) => setNotes((prev) => prev.filter((n) => n.id !== id))}
-                onUpdate={(updated) => setNotes((prev) => prev.map((n) => n.id === updated.id ? updated : n))}
-              />
+            {sortedNotes.map((note) => (
+              <div key={note.id} className="relative group">
+                {/* 핀 버튼 */}
+                <button
+                  onClick={() => togglePin(note.id)}
+                  className={`absolute -top-1 -right-1 z-10 w-6 h-6 rounded-full flex items-center justify-center text-[11px] transition-all shadow-sm ${
+                    pinnedIds.has(note.id)
+                      ? "bg-amber-400 text-white opacity-100"
+                      : "bg-white border border-slate-200 text-slate-400 opacity-0 group-hover:opacity-100"
+                  }`}
+                  title={pinnedIds.has(note.id) ? "핀 해제" : "핀 고정"}
+                >
+                  📌
+                </button>
+
+                {/* 선택 체크박스 */}
+                {selectMode && (
+                  <button
+                    onClick={() => toggleSelect(note.id)}
+                    className={`absolute top-3 left-3 z-10 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                      selectedIds.has(note.id)
+                        ? "bg-indigo-500 border-indigo-500 text-white"
+                        : "border-slate-300 bg-white"
+                    }`}
+                  >
+                    {selectedIds.has(note.id) && (
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                )}
+
+                <div className={selectMode ? "pl-8" : ""}>
+                  <NoteCard
+                    note={note}
+                    onDelete={(id) => setNotes((prev) => prev.filter((n) => n.id !== id))}
+                    onUpdate={(updated) => setNotes((prev) => prev.map((n) => n.id === updated.id ? updated : n))}
+                  />
+                </div>
+
+                {/* 핀된 노트 표시 */}
+                {pinnedIds.has(note.id) && (
+                  <div className="absolute top-3 left-3 z-10">
+                    <span className="text-[10px] bg-amber-100 text-amber-700 border border-amber-200 rounded-full px-1.5 py-0.5 font-medium">핀</span>
+                  </div>
+                )}
+              </div>
             ))}
           </div>
 
@@ -297,6 +538,37 @@ export default function DashboardPage() {
         </div>
       </main>
 
+      {/* 다중 선택 액션 바 */}
+      {selectMode && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-lg sm:left-60">
+          <div className="max-w-3xl mx-auto px-4 sm:px-8 py-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-slate-600">
+              <span className="font-medium">{selectedIds.size}개 선택됨</span>
+              <button onClick={() => setSelectedIds(new Set<string>(notes.map((n) => n.id)))} className="text-indigo-500 hover:underline text-xs">전체 선택</button>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => doExport("json")}
+                disabled={selectedIds.size === 0 || exporting}
+                className="text-sm px-3 py-1.5 rounded-lg border border-violet-200 text-violet-600 hover:bg-violet-50 disabled:opacity-40 transition-colors"
+              >
+                📤 내보내기
+              </button>
+              <button
+                onClick={bulkDelete}
+                disabled={selectedIds.size === 0 || bulkDeleting}
+                className="text-sm px-3 py-1.5 rounded-lg bg-red-500 text-white hover:bg-red-600 disabled:opacity-40 transition-colors"
+              >
+                {bulkDeleting ? "삭제 중..." : `🗑 ${selectedIds.size}개 삭제`}
+              </button>
+              <button onClick={exitSelectMode} className="text-sm px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors">
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 파일 업로드 모달 */}
       {showUpload && (
         <div
@@ -305,11 +577,11 @@ export default function DashboardPage() {
         >
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bold text-slate-800">📁 파일 업로드</h2>
+              <h2 className="font-bold text-slate-800">📁 파일·이미지 업로드</h2>
               <button onClick={() => setShowUpload(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">✕</button>
             </div>
             <p className="text-sm text-slate-500 mb-4">
-              아이폰 메모·텍스트 파일을 업로드하면 Claude AI가 자동 분류하여 저장합니다.
+              텍스트 파일, PDF, Word, 이미지를 업로드하면 Claude AI가 자동 분류하여 저장합니다. 이미지는 OCR로 텍스트를 추출합니다.
             </p>
             <FileUpload
               onUploaded={(newNotes) => {

@@ -17,8 +17,8 @@ interface FileUploadProps {
   onUploaded?: (notes: UploadedNote[]) => void;
 }
 
-const ACCEPTED = ".txt,.md,.text,.pdf,.docx,.doc";
-const ACCEPTED_EXTS = new Set(["txt", "md", "text", "pdf", "docx", "doc"]);
+const ACCEPTED = ".txt,.md,.text,.pdf,.docx,.doc,.jpg,.jpeg,.png,.gif,.webp";
+const ACCEPTED_EXTS = new Set(["txt", "md", "text", "pdf", "docx", "doc", "jpg", "jpeg", "png", "gif", "webp"]);
 
 export default function FileUpload({ onUploaded }: FileUploadProps) {
   const [dragging, setDragging] = useState(false);
@@ -112,7 +112,7 @@ export default function FileUpload({ onUploaded }: FileUploadProps) {
             : "파일을 드래그하거나 클릭해서 업로드"}
         </span>
         <span className="text-xs text-slate-400">
-          txt · md · pdf · docx 지원 / 최대 10개, 파일당 10MB
+          txt · md · pdf · docx · 이미지(jpg/png) 지원 / 최대 10개, 파일당 10MB
         </span>
 
         <input

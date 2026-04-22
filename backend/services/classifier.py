@@ -97,3 +97,61 @@ def classify_content(content: str) -> dict:
     except Exception as e:
         logger.error("분류 중 예상치 못한 오류: %s", e)
         return _FALLBACK.copy()
+
+
+IMAGE_PROMPT = """이 이미지의 내용을 분석하여 JSON으로만 응답하라. 부가 설명 없이 JSON만.
+
+{{"summary":"2-3문장 핵심 요약","highlights":["핵심문장1","핵심문장2"],"keywords":["키1","키2","키3","키4","키5"],"category":"카테고리","content_type":"article|video|memo|link|other","ocr_text":"이미지에서 추출한 텍스트 전체(텍스트가 없으면 빈 문자열)"}}
+
+카테고리: {categories}
+카테고리 포함 범위: 건강(스포츠·운동·피트니스·헬스 포함)
+keywords: 핵심 키워드 5~7개. 고유명사·브랜드명·핵심 개념 우선."""
+
+
+def analyze_image(image_bytes: bytes, media_type: str) -> dict:
+    """
+    Claude Vision으로 이미지 OCR + 분류.
+    media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+    """
+    import base64
+    import re
+
+    categories_str = _get_categories_str()
+    b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=700,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": media_type, "data": b64},
+                    },
+                    {"type": "text", "text": IMAGE_PROMPT.format(categories=categories_str)},
+                ],
+            }],
+        )
+
+        raw = response.content[0].text if response.content else ""
+        cleaned = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
+        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+        if not match:
+            logger.error("이미지 분석 응답에서 JSON 추출 실패")
+            return _FALLBACK.copy()
+
+        result = json.loads(match.group())
+        return {
+            "summary": result.get("summary", ""),
+            "highlights": result.get("highlights", []),
+            "keywords": result.get("keywords", []),
+            "category": result.get("category", "기타"),
+            "content_type": result.get("content_type", "other"),
+            "ocr_text": result.get("ocr_text", ""),
+        }
+
+    except Exception as e:
+        logger.error("이미지 분석 실패: %s", e)
+        return _FALLBACK.copy()
