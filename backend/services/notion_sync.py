@@ -119,7 +119,10 @@ def _find_existing_page(note_id: str) -> Optional[str]:
         results = resp.json().get("results", [])
         return results[0]["id"] if results else None
     except Exception as e:
-        logger.warning("Notion 페이지 조회 실패: %s", e)
+        try:
+            logger.warning("Notion 페이지 조회 실패: %s | 응답: %s", e, resp.text[:300])
+        except Exception:
+            logger.warning("Notion 페이지 조회 실패: %s", e)
         return None
 
 
@@ -160,7 +163,10 @@ def sync_note_to_notion(note: dict) -> bool:
         return True
 
     except Exception as e:
-        logger.error("Notion 동기화 실패 (id=%s): %s", note.get("id"), e)
+        try:
+            logger.error("Notion 동기화 실패 (id=%s): %s | 응답: %s", note.get("id"), e, resp.text[:500])
+        except Exception:
+            logger.error("Notion 동기화 실패 (id=%s): %s", note.get("id"), e)
         return False
 
 
