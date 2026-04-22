@@ -98,6 +98,26 @@ async def edit_note(note_id: str, body: NoteUpdate):
     return note
 
 
+@router.post("/{note_id}/reclassify", response_model=NoteResponse)
+async def reclassify_note(note_id: str):
+    """기존 노트를 Claude로 재분류 (요약·키워드·카테고리 갱신)"""
+    note = get_note_by_id(note_id)
+    if not note:
+        raise HTTPException(status_code=404, detail="노트를 찾을 수 없습니다")
+
+    result = classify_content(note["raw_content"])
+    updated = update_note(note_id, {
+        "summary": result.get("summary", ""),
+        "highlights": result.get("highlights", []),
+        "keywords": result.get("keywords", []),
+        "category": result.get("category", "기타"),
+        "content_type": result.get("content_type", "other"),
+    })
+    if not updated:
+        raise HTTPException(status_code=500, detail="재분류 저장 실패")
+    return updated
+
+
 @router.get("/{note_id}/related", response_model=list[NoteResponse])
 async def related_notes(note_id: str, limit: int = Query(5, ge=1, le=20)):
     """키워드 기반 연관 노트 조회"""

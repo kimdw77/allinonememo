@@ -66,6 +66,7 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reclassifying, setReclassifying] = useState(false);
 
   // 편집 폼 상태
   const [editSummary, setEditSummary] = useState(note.summary || "");
@@ -81,6 +82,17 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
     if (!confirm("이 노트를 삭제할까요?")) return;
     const res = await fetch(`/api/notes/${note.id}`, { method: "DELETE" });
     if (res.ok && onDelete) onDelete(note.id);
+  };
+
+  const handleReclassify = async () => {
+    if (!confirm("AI로 요약·키워드·카테고리를 다시 분류할까요?")) return;
+    setReclassifying(true);
+    try {
+      const res = await fetch(`/api/notes/${note.id}/reclassify`, { method: "POST" });
+      if (res.ok && onUpdate) onUpdate(await res.json());
+    } finally {
+      setReclassifying(false);
+    }
   };
 
   const handleEditOpen = () => {
@@ -154,6 +166,23 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <time className="text-xs text-slate-400">{date}</time>
+          {/* 재분류 버튼 */}
+          <button
+            onClick={handleReclassify}
+            disabled={reclassifying}
+            className="text-slate-300 hover:text-emerald-400 disabled:opacity-40 transition-colors p-0.5 rounded"
+            title="AI 재분류"
+          >
+            {reclassifying ? (
+              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            )}
+          </button>
           {/* 편집 버튼 */}
           <button
             onClick={handleEditOpen}
