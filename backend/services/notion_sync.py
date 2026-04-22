@@ -43,7 +43,7 @@ def _build_page_body(note: dict) -> dict:
     keyword_options = [{"name": kw[:100]} for kw in keywords[:10]]
 
     properties: dict = {
-        "제목": {
+        "이름": {
             "title": [{"text": {"content": title}}]
         },
         "카테고리": {
@@ -66,8 +66,9 @@ def _build_page_body(note: dict) -> dict:
 
     created_at = note.get("created_at")
     if created_at:
-        # ISO8601 형식 그대로 전달
-        properties["저장일시"] = {"date": {"start": created_at}}
+        # 마이크로초 제거 후 Notion date 형식으로 전달
+        date_str = created_at[:19] + "+00:00" if len(created_at) >= 19 else created_at
+        properties["저장일시"] = {"date": {"start": date_str}}
 
     # note_id를 외부 ID로 저장 (중복 방지용)
     note_id = note.get("id", "")
