@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 import httpx
 from bs4 import BeautifulSoup
 
-from services.youtube import is_youtube_url, fetch_youtube_transcript
+from services.youtube import is_youtube_url, fetch_youtube_transcript, fetch_youtube_meta
 
 logger = logging.getLogger(__name__)
 
@@ -59,12 +59,16 @@ def fetch_url_content(url: str) -> Optional[str]:
     YouTube URL은 자막 추출 우선 시도, 실패 시 일반 크롤링 폴백.
     실패 시 None 반환 (데이터 손실 방지).
     """
-    # YouTube URL: 자막 추출 우선
+    # YouTube URL: 자막 → oEmbed 제목 → 일반 크롤링 순으로 시도
     if is_youtube_url(url):
         transcript = fetch_youtube_transcript(url)
         if transcript:
             return transcript
-        logger.info("YouTube 자막 없음, 일반 크롤링으로 폴백: %s", url)
+        # 자막 없으면 oEmbed로 제목·채널명이라도 가져옴
+        meta = fetch_youtube_meta(url)
+        if meta:
+            return meta
+        logger.info("YouTube oEmbed도 실패, 일반 크롤링으로 폴백: %s", url)
 
     if not _is_safe_url(url):
         logger.warning("SSRF 차단: 허용되지 않은 URL — %s", url)

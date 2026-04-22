@@ -44,13 +44,11 @@ def fetch_youtube_transcript(url: str) -> Optional[str]:
         return None
 
     try:
-        from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
+        from youtube_transcript_api import YouTubeTranscriptApi
 
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-
         transcript = None
 
-        # 1) 우선순위 언어로 수동 자막 시도
         for lang in _LANG_PRIORITY:
             try:
                 transcript = transcript_list.find_manually_created_transcript([lang])
@@ -58,7 +56,6 @@ def fetch_youtube_transcript(url: str) -> Optional[str]:
             except Exception:
                 continue
 
-        # 2) 수동 자막 없으면 자동 생성 자막 시도 (한국어 → 영어)
         if transcript is None:
             for lang in _LANG_PRIORITY:
                 try:
@@ -67,7 +64,6 @@ def fetch_youtube_transcript(url: str) -> Optional[str]:
                 except Exception:
                     continue
 
-        # 3) 아직도 없으면 사용 가능한 첫 번째 자막 사용
         if transcript is None:
             available = list(transcript_list)
             if available:
@@ -77,11 +73,8 @@ def fetch_youtube_transcript(url: str) -> Optional[str]:
             logger.info("YouTube 자막 없음: %s", video_id)
             return None
 
-        # 자막 데이터를 하나의 텍스트로 합치기 (타임스탬프 제거)
         entries = transcript.fetch()
         text = " ".join(entry["text"] for entry in entries if entry.get("text"))
-
-        # 5000자로 제한 (Claude 입력 최적화)
         text = text[:5000].strip()
 
         if not text:
@@ -91,6 +84,31 @@ def fetch_youtube_transcript(url: str) -> Optional[str]:
         return text
 
     except Exception as e:
-        # TranscriptsDisabled, NoTranscriptFound, VideoUnavailable 등 모두 처리
         logger.info("YouTube 자막 추출 실패 (%s): %s", video_id, type(e).__name__)
+        return None
+
+
+def fetch_youtube_meta(url: str) -> Optional[str]:
+    """
+    YouTube oEmbed API로 영상 제목·채널명 조회.
+    자막이 없을 때 폴백으로 사용 — 무인증 공개 API.
+    """
+    try:
+        import httpx
+        oembed_url = f"https://www.youtube.com/oembed?url={url}&format=json"
+        resp = httpx.get(oembed_url, timeout=8, follow_redirects=True)
+        if resp.status_code != 200:
+            return None
+        data = resp.json()
+        title = data.get("title", "")
+        author = data.get("author_name", "")
+        if not title:
+            return None
+        meta = f"YouTube 영상 제목: {title}"
+        if author:
+            meta += f"\n채널: {author}"
+        logger.info("YouTube oEmbed 조회 성공: %s", title)
+        return meta
+    except Exception as e:
+        logger.info("YouTube oEmbed 실패 (%s): %s", url, e)
         return None
