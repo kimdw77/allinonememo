@@ -242,9 +242,9 @@ async def _handle_command(text: str, chat_id: int | None) -> None:
         )
         await _send_telegram(chat_id, msg)
 
-    elif cmd in ("/일정", "/일정@myvaultbot"):
+    elif cmd in ("/cal", "/cal@myvaultbot", "/일정", "/일정@myvaultbot"):
         if not arg:
-            await _send_telegram(chat_id, "사용법: `/일정 내일 오전 10시 팀 미팅`")
+            await _send_telegram(chat_id, "사용법: `/cal 내일 오전 10시 팀 미팅`")
             return
         try:
             from services.schedule_detector import detect_schedule
@@ -274,7 +274,7 @@ async def _handle_command(text: str, chat_id: int | None) -> None:
     elif cmd in ("/help", "/help@myvaultbot", "/start"):
         help_text = (
             "🤖 *MyVault 봇 명령어*\n\n"
-            "/일정 `내용` — Google Calendar 등록\n"
+            "/cal `내용` — Google Calendar 등록\n"
             "/search `키워드` — 노트 검색\n"
             "/list — 최근 5개 노트\n"
             "/today — 오늘 저장된 노트\n"
