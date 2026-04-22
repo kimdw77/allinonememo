@@ -1,0 +1,26 @@
+{
+  "name": "MyVault — AI 지식저장소",
+  "short_name": "MyVault",
+  "description": "텔레그램으로 보낸 메모를 AI가 자동 분류·저장하는 개인 지식저장소",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#6366f1",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "lang": "ko"
+}

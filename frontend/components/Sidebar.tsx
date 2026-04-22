@@ -5,7 +5,8 @@
  * 카테고리 목록은 /api/categories에서 동적 로드
  */
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase";
 
 interface Category {
@@ -25,6 +26,7 @@ interface SidebarProps {
 
 export default function Sidebar({ selected, onSelect, noteCount, isOpen, onClose }: SidebarProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [categories, setCategories] = useState<Category[]>([]);
   const [managing, setManaging] = useState(false);
   const [newName, setNewName] = useState("");
@@ -218,6 +220,22 @@ export default function Sidebar({ selected, onSelect, noteCount, isOpen, onClose
             ))}
           </ul>
         </nav>
+
+        {/* 그래프 뷰 */}
+        <div className="px-3 pb-2 border-t border-slate-800 pt-3">
+          <Link
+            href="/graph"
+            onClick={onClose}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+              pathname === "/graph"
+                ? "bg-indigo-500/20 text-indigo-400 font-medium"
+                : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            }`}
+          >
+            <span className="text-base w-5 text-center">🕸️</span>
+            <span>노트 그래프</span>
+          </Link>
+        </div>
 
         {/* 로그아웃 */}
         <div className="px-3 py-4 border-t border-slate-800">
