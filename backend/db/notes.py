@@ -222,3 +222,158 @@ def delete_note(note_id: str) -> bool:
     except Exception as e:
         logger.error("노트 삭제 실패 (id=%s): %s", note_id, e)
         return False
+
+
+def get_duplicates(threshold: int = 3) -> list[dict]:
+    """
+    키워드 공통 개수 >= threshold 인 노트 쌍을 중복 후보로 반환.
+    최신 300개 노트 대상, O(n²) 이므로 limit로 범위 제한.
+    """
+    try:
+        db = get_db()
+        result = db.table("notes").select(
+            "id,summary,keywords,category,created_at"
+        ).order("created_at", desc=True).limit(300).execute()
+
+        notes = result.data or []
+        pairs: list[dict] = []
+
+        for i, a in enumerate(notes):
+            kw_a = set(a.get("keywords") or [])
+            if not kw_a:
+                continue
+            for b in notes[i + 1:]:
+                kw_b = set(b.get("keywords") or [])
+                common = kw_a & kw_b
+                if len(common) >= threshold:
+                    pairs.append({
+                        "note_a": {
+                            "id": a["id"],
+                            "summary": (a.get("summary") or "")[:100],
+                            "category": a.get("category", ""),
+                            "created_at": a.get("created_at", ""),
+                        },
+                        "note_b": {
+                            "id": b["id"],
+                            "summary": (b.get("summary") or "")[:100],
+                            "category": b.get("category", ""),
+                            "created_at": b.get("created_at", ""),
+                        },
+                        "common_keywords": sorted(common),
+                        "score": len(common),
+                    })
+
+        # 점수 높은 순 정렬
+        pairs.sort(key=lambda p: p["score"], reverse=True)
+        return pairs[:50]
+
+    except Exception as e:
+        logger.error("중복 노트 감지 실패: %s", e)
+        return []
+
+
+def merge_notes(keep_id: str, remove_id: str) -> Optional[dict]:
+    """
+    두 노트 병합: keep_id 노트의 keywords에 remove_id 키워드를 합치고
+    remove_id 노트는 삭제. 병합된 keep 노트 반환.
+    """
+    try:
+        db = get_db()
+        keep = get_note_by_id(keep_id)
+        remove = get_note_by_id(remove_id)
+        if not keep or not remove:
+            return None
+
+        # 키워드 합집합
+        merged_kw = list(dict.fromkeys(
+            (keep.get("keywords") or []) + (remove.get("keywords") or [])
+        ))
+
+        updated = update_note(keep_id, {"keywords": merged_kw})
+        db.table("notes").delete().eq("id", remove_id).execute()
+        return updated
+
+    except Exception as e:
+        logger.error("노트 병합 실패 (keep=%s, remove=%s): %s", keep_id, remove_id, e)
+        return None
+
+
+def get_stats() -> dict:
+    """
+    대시보드 통계 데이터 반환.
+    - 카테고리별 노트 수
+    - 소스별 노트 수
+    - 오늘/이번 주 추가된 노트 수
+    - 총 노트 수
+    """
+    try:
+        db = get_db()
+        result = db.table("notes").select("id,category,source,created_at").execute()
+        notes = result.data or []
+
+        from datetime import datetime, timedelta, timezone
+
+        KST = timezone(timedelta(hours=9))
+        now = datetime.now(KST)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start = today_start - timedelta(days=now.weekday())
+
+        category_counts: dict[str, int] = {}
+        source_counts: dict[str, int] = {}
+        today_count = 0
+        week_count = 0
+
+        for n in notes:
+            cat = n.get("category") or "기타"
+            src = n.get("source") or "unknown"
+            category_counts[cat] = category_counts.get(cat, 0) + 1
+            source_counts[src] = source_counts.get(src, 0) + 1
+
+            try:
+                created = datetime.fromisoformat(n["created_at"].replace("Z", "+00:00"))
+                created_kst = created.astimezone(KST)
+                if created_kst >= today_start:
+                    today_count += 1
+                if created_kst >= week_start:
+                    week_count += 1
+            except Exception:
+                pass
+
+        # 일별 추이: 최근 7일
+        daily: list[dict] = []
+        for i in range(6, -1, -1):
+            day = today_start - timedelta(days=i)
+            day_end = day + timedelta(days=1)
+            count = sum(
+                1 for n in notes
+                if _in_range(n.get("created_at", ""), day, day_end, KST)
+            )
+            daily.append({"date": day.strftime("%m/%d"), "count": count})
+
+        return {
+            "total": len(notes),
+            "today": today_count,
+            "this_week": week_count,
+            "by_category": [
+                {"name": k, "count": v}
+                for k, v in sorted(category_counts.items(), key=lambda x: -x[1])
+            ],
+            "by_source": [
+                {"name": k, "count": v}
+                for k, v in sorted(source_counts.items(), key=lambda x: -x[1])
+            ],
+            "daily_trend": daily,
+        }
+
+    except Exception as e:
+        logger.error("통계 조회 실패: %s", e)
+        return {"total": 0, "today": 0, "this_week": 0, "by_category": [], "by_source": [], "daily_trend": []}
+
+
+def _in_range(created_at: str, start, end, tz) -> bool:
+    try:
+        from datetime import datetime
+        dt = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(tz)
+        return start <= dt < end
+    except Exception:
+        return False

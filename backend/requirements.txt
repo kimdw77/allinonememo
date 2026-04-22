@@ -16,3 +16,6 @@ voyageai==0.2.3
 notion-client==2.2.1
 google-auth==2.29.0
 google-api-python-client==2.126.0
+python-multipart==0.0.9
+pdfplumber==0.11.0
+python-docx==1.1.2

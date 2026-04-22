@@ -12,7 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from config import settings
-from routers import webhook, notes, rss, categories, sync
+from routers import webhook, notes, rss, categories, sync, stats
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "PUT"],
     allow_headers=["Content-Type", "Authorization", "X-API-Key"],
 )
 
@@ -54,6 +54,7 @@ app.include_router(notes.router, prefix="/api/notes", tags=["notes"])
 app.include_router(rss.router, prefix="/api/rss", tags=["rss"])
 app.include_router(categories.router, prefix="/api/categories", tags=["categories"])
 app.include_router(sync.router, prefix="/api/sync", tags=["sync"])
+app.include_router(stats.router, prefix="/api/stats", tags=["stats"])
 
 
 @app.on_event("startup")

@@ -9,10 +9,12 @@ from typing import Any
 
 from fastapi import APIRouter, Request, Response, HTTPException
 
+import httpx
+
 from config import settings
 from services.classifier import classify_content
 from services.fetcher import fetch_url_content
-from db.notes import insert_note
+from db.notes import insert_note, get_notes, get_stats
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -75,6 +77,13 @@ async def telegram_webhook(request: Request) -> Response:
     if not text:
         return Response(status_code=200)
 
+    chat_id = message.get("chat", {}).get("id")
+
+    # 명령어 처리 (/search, /today, /list, /help, /stats)
+    if text.startswith("/"):
+        await _handle_command(text, chat_id)
+        return Response(status_code=200)
+
     # URL 추출 (첫 번째 entity가 URL인 경우)
     url: str | None = None
     entities = message.get("entities", [])
@@ -92,10 +101,11 @@ async def telegram_webhook(request: Request) -> Response:
         raw_content=text,
         url=url,
         metadata={
-            "chat_id": message.get("chat", {}).get("id"),
+            "chat_id": chat_id,
             "message_id": message.get("message_id"),
         },
     )
+    await _send_telegram(chat_id, "✅ 노트가 저장되었습니다!")
 
     return Response(status_code=200)
 
@@ -137,6 +147,105 @@ async def kakao_webhook(request: Request) -> Response:
 def _is_allowed_user(user_id: str) -> bool:
     """나의 Telegram User ID 화이트리스트 검사"""
     return user_id == settings.TELEGRAM_ALLOWED_USER_ID
+
+
+async def _send_telegram(chat_id: int | None, text: str) -> None:
+    """텔레그램 메시지 전송 (Markdown 지원). 실패 시 로그만 남김."""
+    if not chat_id or not settings.TELEGRAM_BOT_TOKEN:
+        return
+    try:
+        url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage"
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(url, json={
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "Markdown",
+            })
+    except Exception as e:
+        logger.error("텔레그램 메시지 전송 실패: %s", e)
+
+
+async def _handle_command(text: str, chat_id: int | None) -> None:
+    """
+    텔레그램 봇 명령어 처리.
+    /search <키워드> — 노트 검색
+    /today — 오늘 저장된 노트 목록
+    /list — 최근 5개 노트
+    /stats — 통계 요약
+    /help — 명령어 안내
+    """
+    parts = text.strip().split(None, 1)
+    cmd = parts[0].lower()
+    arg = parts[1].strip() if len(parts) > 1 else ""
+
+    if cmd in ("/search", "/search@myvaultbot"):
+        if not arg:
+            await _send_telegram(chat_id, "사용법: `/search 키워드`")
+            return
+        notes = get_notes(query=arg, limit=5)
+        if not notes:
+            await _send_telegram(chat_id, f"🔍 *{arg}* 검색 결과가 없습니다.")
+            return
+        lines = [f"🔍 *{arg}* 검색 결과 ({len(notes)}개)\n"]
+        for n in notes:
+            summary = (n.get("summary") or "")[:80]
+            cat = n.get("category", "기타")
+            lines.append(f"• [{cat}] {summary}")
+        await _send_telegram(chat_id, "\n".join(lines))
+
+    elif cmd in ("/today", "/today@myvaultbot"):
+        from datetime import datetime, timedelta, timezone
+        KST = timezone(timedelta(hours=9))
+        today = datetime.now(KST).strftime("%Y-%m-%d")
+        notes = get_notes(query=today, limit=10)
+        if not notes:
+            await _send_telegram(chat_id, f"📅 오늘 ({today}) 저장된 노트가 없습니다.")
+            return
+        lines = [f"📅 오늘 저장된 노트 ({len(notes)}개)\n"]
+        for n in notes:
+            summary = (n.get("summary") or n.get("raw_content") or "")[:60]
+            lines.append(f"• {summary}")
+        await _send_telegram(chat_id, "\n".join(lines))
+
+    elif cmd in ("/list", "/list@myvaultbot"):
+        notes = get_notes(limit=5)
+        if not notes:
+            await _send_telegram(chat_id, "저장된 노트가 없습니다.")
+            return
+        lines = ["📋 *최근 노트 5개*\n"]
+        for n in notes:
+            summary = (n.get("summary") or "")[:70]
+            cat = n.get("category", "기타")
+            lines.append(f"• [{cat}] {summary}")
+        await _send_telegram(chat_id, "\n".join(lines))
+
+    elif cmd in ("/stats", "/stats@myvaultbot"):
+        s = get_stats()
+        top_cats = s.get("by_category", [])[:3]
+        cat_lines = " | ".join(f"{c['name']} {c['count']}개" for c in top_cats)
+        msg = (
+            f"📊 *MyVault 통계*\n\n"
+            f"전체 노트: *{s['total']}개*\n"
+            f"오늘: *{s['today']}개*\n"
+            f"이번 주: *{s['this_week']}개*\n"
+            f"카테고리 TOP3: {cat_lines}"
+        )
+        await _send_telegram(chat_id, msg)
+
+    elif cmd in ("/help", "/help@myvaultbot", "/start"):
+        help_text = (
+            "🤖 *MyVault 봇 명령어*\n\n"
+            "/search `키워드` — 노트 검색\n"
+            "/list — 최근 5개 노트\n"
+            "/today — 오늘 저장된 노트\n"
+            "/stats — 통계 요약\n"
+            "/help — 이 메시지\n\n"
+            "명령어 없이 텍스트/링크를 보내면 자동으로 저장됩니다."
+        )
+        await _send_telegram(chat_id, help_text)
+
+    else:
+        await _send_telegram(chat_id, f"알 수 없는 명령어입니다. /help 로 명령어를 확인하세요.")
 
 
 async def _detect_and_schedule(text: str) -> None:

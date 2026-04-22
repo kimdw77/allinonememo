@@ -4,12 +4,12 @@ routers/notes.py — 노트 CRUD API
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 
 from dependencies.auth import require_api_key
 from models import NoteCreate, NoteUpdate, NoteResponse
 from services.classifier import classify_content
-from db.notes import insert_note, update_note, get_notes, get_note_by_id, delete_note, vector_search_notes, get_related_notes, get_graph_data
+from db.notes import insert_note, update_note, get_notes, get_note_by_id, delete_note, vector_search_notes, get_related_notes, get_graph_data, get_duplicates, merge_notes
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_api_key)])
@@ -46,6 +46,90 @@ async def create_note(body: NoteCreate):
     if not note:
         raise HTTPException(status_code=500, detail="노트 저장에 실패했습니다")
     return note
+
+
+# ─────────────────────────────────────────
+# 파일 업로드 (아이폰 노트 등)
+# ─────────────────────────────────────────
+
+ALLOWED_EXTENSIONS = {".txt", ".md", ".text", ".pdf", ".docx", ".doc"}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+
+@router.post("/upload", response_model=list[NoteResponse], status_code=201)
+async def upload_files(files: list[UploadFile] = File(...)):
+    """
+    파일 업로드 → 텍스트 추출 → Claude 분류 → 저장.
+    txt/md/pdf/docx 지원. 최대 10개, 파일당 10MB.
+    """
+    import os
+    from pathlib import Path
+    from services.file_parser import extract_text
+
+    if len(files) > 10:
+        raise HTTPException(status_code=400, detail="한 번에 최대 10개 파일만 업로드 가능합니다")
+
+    created: list[dict] = []
+    errors: list[str] = []
+
+    for upload in files:
+        filename = upload.filename or "unknown"
+        ext = Path(filename).suffix.lower()
+
+        if ext not in ALLOWED_EXTENSIONS:
+            errors.append(f"{filename}: 지원하지 않는 형식 ({ext})")
+            continue
+
+        content = await upload.read()
+        if len(content) > MAX_FILE_SIZE:
+            errors.append(f"{filename}: 파일 크기 초과 (최대 10MB)")
+            continue
+
+        text = extract_text(filename, content)
+        if not text.strip():
+            errors.append(f"{filename}: 텍스트를 추출할 수 없습니다")
+            continue
+
+        classify_result = classify_content(text)
+        note = insert_note(
+            source="upload",
+            raw_content=text,
+            summary=classify_result.get("summary", ""),
+            highlights=classify_result.get("highlights", []),
+            keywords=classify_result.get("keywords", []),
+            category=classify_result.get("category", "기타"),
+            content_type=classify_result.get("content_type", "other"),
+            metadata={"original_filename": filename, "file_ext": ext},
+        )
+        if note:
+            created.append(note)
+        else:
+            errors.append(f"{filename}: 저장 실패")
+
+    if not created and errors:
+        raise HTTPException(status_code=422, detail="; ".join(errors))
+
+    return created
+
+
+# ─────────────────────────────────────────
+# 중복 노트 감지 및 병합
+# ─────────────────────────────────────────
+
+@router.get("/duplicates")
+async def find_duplicates(threshold: int = Query(3, ge=2, le=10, description="공통 키워드 최소 개수")):
+    """키워드 기반 중복 노트 후보 쌍 반환"""
+    pairs = get_duplicates(threshold=threshold)
+    return {"pairs": pairs, "count": len(pairs)}
+
+
+@router.post("/merge")
+async def merge_two_notes(keep_id: str, remove_id: str):
+    """두 노트를 병합 (keep_id 유지, remove_id 삭제)"""
+    result = merge_notes(keep_id=keep_id, remove_id=remove_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="노트를 찾을 수 없거나 병합 실패")
+    return result
 
 
 # 고정 경로는 반드시 /{note_id} 앞에 위치해야 FastAPI가 올바르게 라우팅함
