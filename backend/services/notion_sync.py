@@ -15,6 +15,18 @@ _NOTION_API = "https://api.notion.com/v1"
 _NOTION_VERSION = "2022-06-28"
 
 
+def _format_database_id(raw_id: str) -> str:
+    """32자리 hex ID를 Notion API 요구 형식(하이픈 포함)으로 변환"""
+    clean = raw_id.replace("-", "")
+    if len(clean) == 32:
+        return f"{clean[0:8]}-{clean[8:12]}-{clean[12:16]}-{clean[16:20]}-{clean[20:32]}"
+    return raw_id
+
+
+def _get_database_id() -> str:
+    return _format_database_id(settings.NOTION_DATABASE_ID)
+
+
 def _get_headers() -> dict:
     return {
         "Authorization": f"Bearer {settings.NOTION_TOKEN}",
@@ -78,7 +90,7 @@ def _build_page_body(note: dict) -> dict:
             })
 
     return {
-        "parent": {"database_id": settings.NOTION_DATABASE_ID},
+        "parent": {"database_id": _get_database_id()},
         "properties": properties,
         "children": children,
     }
@@ -92,7 +104,7 @@ def _find_existing_page(note_id: str) -> Optional[str]:
     try:
         import httpx
         resp = httpx.post(
-            f"{_NOTION_API}/databases/{settings.NOTION_DATABASE_ID}/query",
+            f"{_NOTION_API}/databases/{_get_database_id()}/query",
             headers=_get_headers(),
             json={
                 "filter": {
@@ -158,6 +170,7 @@ def bulk_sync_to_notion(limit: int = 100) -> dict:
     """
     if not settings.NOTION_TOKEN or not settings.NOTION_DATABASE_ID:
         return {"synced": 0, "failed": 0, "error": "Notion 환경변수 미설정"}
+
 
     try:
         from db.notes import get_notes
