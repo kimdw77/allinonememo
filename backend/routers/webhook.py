@@ -85,7 +85,8 @@ async def telegram_webhook(request: Request) -> Response:
             url = text[offset: offset + length]
             break
 
-    # TODO(phase4): 일정 감지 → Google Calendar 자동 등록
+    # 일정 감지 → Google Calendar 자동 등록
+    await _detect_and_schedule(text)
     await _process_and_save(
         source="telegram",
         raw_content=text,
@@ -136,6 +137,32 @@ async def kakao_webhook(request: Request) -> Response:
 def _is_allowed_user(user_id: str) -> bool:
     """나의 Telegram User ID 화이트리스트 검사"""
     return user_id == settings.TELEGRAM_ALLOWED_USER_ID
+
+
+async def _detect_and_schedule(text: str) -> None:
+    """
+    텍스트에서 일정을 감지하면 Google Calendar에 자동 등록.
+    실패해도 전체 처리 흐름에 영향 없음.
+    """
+    try:
+        from services.schedule_detector import detect_schedule
+        from services.calendar import create_event
+
+        schedule = detect_schedule(text)
+        if not schedule:
+            return
+
+        event_url = create_event(
+            title=schedule["title"],
+            start=schedule["start"],
+            end=schedule["end"],
+            location=schedule.get("location", ""),
+            description=schedule.get("description", ""),
+        )
+        if event_url:
+            logger.info("일정 자동 등록 완료: %s → %s", schedule["title"], event_url)
+    except Exception as e:
+        logger.error("일정 감지/등록 중 오류 (무시): %s", e)
 
 
 async def _process_and_save(

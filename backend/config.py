@@ -27,6 +27,20 @@ class Settings(BaseSettings):
     # Voyage AI (벡터 검색용 임베딩, Phase 2)
     VOYAGE_API_KEY: str = ""
 
+    # Notion 동기화 (Phase 2)
+    NOTION_TOKEN: str = ""
+    NOTION_DATABASE_ID: str = ""
+
+    # Google Drive 백업 (서비스 계정 방식)
+    GOOGLE_SERVICE_ACCOUNT_JSON: str = ""
+    GOOGLE_DRIVE_FOLDER_ID: str = ""
+
+    # Google Calendar (OAuth2 refresh_token 방식)
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_REFRESH_TOKEN: str = ""
+    GOOGLE_CALENDAR_ID: str = "primary"
+
     # API 보안: 백엔드 내부 API 호출에 사용하는 시크릿 키
     API_SECRET_KEY: str
 

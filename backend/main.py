@@ -12,7 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from config import settings
-from routers import webhook, notes, rss, categories
+from routers import webhook, notes, rss, categories, sync
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +53,7 @@ app.include_router(webhook.router, prefix="/webhook", tags=["webhook"])
 app.include_router(notes.router, prefix="/api/notes", tags=["notes"])
 app.include_router(rss.router, prefix="/api/rss", tags=["rss"])
 app.include_router(categories.router, prefix="/api/categories", tags=["categories"])
+app.include_router(sync.router, prefix="/api/sync", tags=["sync"])
 
 
 @app.on_event("startup")
@@ -66,8 +67,11 @@ def start_scheduler() -> None:
     scheduler.add_job(fetch_all_feeds, "interval", minutes=30, id="rss_fetch")
     # 일일 요약: 매일 오전 8시 KST
     scheduler.add_job(send_daily_digest, "cron", hour=8, minute=0, id="daily_digest")
+    # Google Drive 백업: 매주 일요일 새벽 2시 KST
+    from services.gdrive_backup import backup_notes_to_drive
+    scheduler.add_job(backup_notes_to_drive, "cron", day_of_week="sun", hour=2, minute=0, id="gdrive_backup")
     scheduler.start()
-    logger.info("스케줄러 시작 (RSS 30분 간격, 일일 요약 08:00 KST)")
+    logger.info("스케줄러 시작 (RSS 30분, 일일 요약 08:00, Drive 백업 일요일 02:00)")
 
 
 @app.get("/health")

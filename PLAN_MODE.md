@@ -26,6 +26,7 @@
 - [ ] 구독 사이트 RSS/URL 자동 수집 및 일일 요약
 - [ ] Notion 양방향 동기화
 - [ ] Google Drive 백업
+- [ ] 텔레그램 -> Gollgel Calendar 일정생성하기 
 
 ### Phase 3 — 고도화
 - [ ] 벡터 검색 (의미 기반 검색)
