@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from dependencies.auth import require_api_key
 from models import NoteCreate, NoteResponse
 from services.classifier import classify_content
-from db.notes import insert_note, get_notes, get_note_by_id, delete_note
+from db.notes import insert_note, get_notes, get_note_by_id, delete_note, vector_search_notes
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_api_key)])
@@ -55,6 +55,30 @@ async def create_note(body: NoteCreate):
     if not note:
         raise HTTPException(status_code=500, detail="노트 저장에 실패했습니다")
     return note
+
+
+@router.get("/search/vector", response_model=list[NoteResponse])
+async def semantic_search(
+    q: str = Query(..., description="의미 기반 검색 쿼리", min_length=1, max_length=500),
+    limit: int = Query(10, ge=1, le=50),
+):
+    """
+    pgvector 의미 기반 검색.
+    VOYAGE_API_KEY 미설정 시 일반 키워드 검색으로 폴백.
+    """
+    from services.embedder import embed_query
+    from config import settings
+
+    if not settings.VOYAGE_API_KEY:
+        # 벡터 검색 불가 시 일반 검색으로 폴백
+        return get_notes(query=q, limit=limit)
+
+    query_vector = embed_query(q)
+    if query_vector is None:
+        return get_notes(query=q, limit=limit)
+
+    results = vector_search_notes(query_vector=query_vector, limit=limit)
+    return results
 
 
 @router.delete("/{note_id}", status_code=204)

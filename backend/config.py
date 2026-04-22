@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # TODO(phase4): Google Calendar 연동
     # GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, GOOGLE_CALENDAR_ID
 
+    # Voyage AI (벡터 검색용 임베딩, Phase 2)
+    VOYAGE_API_KEY: str = ""
+
     # API 보안: 백엔드 내부 API 호출에 사용하는 시크릿 키
     API_SECRET_KEY: str
 

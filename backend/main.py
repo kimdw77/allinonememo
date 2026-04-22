@@ -57,13 +57,17 @@ app.include_router(categories.router, prefix="/api/categories", tags=["categorie
 
 @app.on_event("startup")
 def start_scheduler() -> None:
-    """서버 시작 시 RSS 수집 스케줄러 실행 (30분마다)"""
+    """서버 시작 시 스케줄러 실행"""
     from services.rss_fetcher import fetch_all_feeds
+    from services.digest import send_daily_digest
 
-    scheduler = BackgroundScheduler()
+    scheduler = BackgroundScheduler(timezone="Asia/Seoul")
+    # RSS 수집: 30분마다
     scheduler.add_job(fetch_all_feeds, "interval", minutes=30, id="rss_fetch")
+    # 일일 요약: 매일 오전 8시 KST
+    scheduler.add_job(send_daily_digest, "cron", hour=8, minute=0, id="daily_digest")
     scheduler.start()
-    logger.info("RSS 스케줄러 시작 (30분 간격)")
+    logger.info("스케줄러 시작 (RSS 30분 간격, 일일 요약 08:00 KST)")
 
 
 @app.get("/health")

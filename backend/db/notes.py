@@ -23,7 +23,17 @@ def insert_note(
     """노트 저장. 성공 시 생성된 레코드 반환, 실패 시 None"""
     try:
         db = get_db()
-        result = db.table("notes").insert({
+
+        # 임베딩 생성 (VOYAGE_API_KEY 없으면 건너뜀)
+        embedding = None
+        try:
+            from services.embedder import embed_text
+            text_for_embed = f"{summary or ''}\n{raw_content}".strip()
+            embedding = embed_text(text_for_embed)
+        except Exception as emb_err:
+            logger.warning("임베딩 생성 건너뜀: %s", emb_err)
+
+        row: dict = {
             "source": source,
             "raw_content": raw_content,
             "summary": summary,
@@ -33,8 +43,11 @@ def insert_note(
             "content_type": content_type,
             "url": url,
             "metadata": metadata or {},
-        }).execute()
+        }
+        if embedding is not None:
+            row["embedding"] = embedding
 
+        result = db.table("notes").insert(row).execute()
         return result.data[0] if result.data else None
 
     except Exception as e:
@@ -80,6 +93,24 @@ def get_note_by_id(note_id: str) -> Optional[dict]:
     except Exception as e:
         logger.error("노트 단건 조회 실패 (id=%s): %s", note_id, e)
         return None
+
+
+def vector_search_notes(query_vector: list[float], limit: int = 10) -> list[dict]:
+    """
+    pgvector 코사인 유사도 기반 의미 검색.
+    Supabase RPC 'match_notes' 함수 호출 (supabase/vector_search.sql 필요).
+    """
+    try:
+        db = get_db()
+        result = db.rpc("match_notes", {
+            "query_embedding": query_vector,
+            "match_count": limit,
+        }).execute()
+        return result.data or []
+
+    except Exception as e:
+        logger.error("벡터 검색 실패: %s", e)
+        return []
 
 
 def delete_note(note_id: str) -> bool:
