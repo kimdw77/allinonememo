@@ -36,11 +36,16 @@ const CATEGORY_COLORS = [
 export default function StatsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     fetch("/api/stats")
-      .then((r) => r.json())
-      .then(setStats)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((data: Stats) => setStats(data))
+      .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, []);
 
@@ -52,9 +57,31 @@ export default function StatsPage() {
     );
   }
 
-  if (!stats) return null;
+  if (error || !stats) {
+    return (
+      <div className="min-h-screen bg-slate-50">
+        <header className="sticky top-0 z-10 bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4">
+          <Link href="/" className="text-slate-400 hover:text-indigo-500 transition-colors">← 대시보드</Link>
+          <h1 className="text-lg font-bold text-slate-800">📊 통계</h1>
+        </header>
+        <div className="flex flex-col items-center justify-center py-32 text-center">
+          <p className="text-4xl mb-4">⚠️</p>
+          <p className="text-slate-600 font-medium mb-1">통계를 불러오지 못했습니다</p>
+          <p className="text-slate-400 text-sm mb-6">{error || "백엔드 연결을 확인해주세요"}</p>
+          <button
+            onClick={() => { setError(""); setLoading(true); fetch("/api/stats").then(r => r.json()).then(setStats).catch(e => setError(String(e))).finally(() => setLoading(false)); }}
+            className="px-4 py-2 bg-indigo-500 text-white rounded-xl text-sm hover:bg-indigo-600 transition-colors"
+          >
+            다시 시도
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-  const maxDaily = Math.max(...stats.daily_trend.map((d) => d.count), 1);
+  const maxDaily = stats.daily_trend.length > 0
+    ? Math.max(...stats.daily_trend.map((d) => d.count), 1)
+    : 1;
 
   return (
     <div className="min-h-screen bg-slate-50">
