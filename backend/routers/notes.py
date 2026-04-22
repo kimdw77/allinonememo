@@ -7,9 +7,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from dependencies.auth import require_api_key
-from models import NoteCreate, NoteResponse
+from models import NoteCreate, NoteUpdate, NoteResponse
 from services.classifier import classify_content
-from db.notes import insert_note, get_notes, get_note_by_id, delete_note, vector_search_notes, get_related_notes, get_graph_data
+from db.notes import insert_note, update_note, get_notes, get_note_by_id, delete_note, vector_search_notes, get_related_notes, get_graph_data
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_api_key)])
@@ -81,6 +81,18 @@ async def semantic_search(
 async def get_note(note_id: str):
     """노트 단건 조회"""
     note = get_note_by_id(note_id)
+    if not note:
+        raise HTTPException(status_code=404, detail="노트를 찾을 수 없습니다")
+    return note
+
+
+@router.patch("/{note_id}", response_model=NoteResponse)
+async def edit_note(note_id: str, body: NoteUpdate):
+    """노트 부분 수정 (summary, keywords, category 등)"""
+    fields = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not fields:
+        raise HTTPException(status_code=400, detail="수정할 항목이 없습니다")
+    note = update_note(note_id, fields)
     if not note:
         raise HTTPException(status_code=404, detail="노트를 찾을 수 없습니다")
     return note

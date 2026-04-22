@@ -34,6 +34,15 @@ class NoteListParams(BaseModel):
     offset: int = 0
 
 
+class NoteUpdate(BaseModel):
+    raw_content: Optional[str] = None
+    summary: Optional[str] = None
+    keywords: Optional[list[str]] = None
+    category: Optional[str] = None
+    content_type: Optional[str] = None
+    url: Optional[str] = None
+
+
 class ClassifyResult(BaseModel):
     summary: str
     keywords: list[str]

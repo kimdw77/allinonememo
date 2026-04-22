@@ -160,6 +160,7 @@ export default function DashboardPage() {
                   key={note.id}
                   note={note}
                   onDelete={(id) => setNotes((prev) => prev.filter((n) => n.id !== id))}
+                  onUpdate={(updated) => setNotes((prev) => prev.map((n) => n.id === updated.id ? updated : n))}
                 />
               ))}
             </div>

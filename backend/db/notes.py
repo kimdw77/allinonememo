@@ -202,6 +202,17 @@ def get_graph_data(limit: int = 200) -> dict:
         return {"nodes": [], "edges": []}
 
 
+def update_note(note_id: str, fields: dict) -> Optional[dict]:
+    """노트 부분 업데이트. 성공 시 업데이트된 레코드 반환"""
+    try:
+        db = get_db()
+        result = db.table("notes").update(fields).eq("id", note_id).execute()
+        return result.data[0] if result.data else None
+    except Exception as e:
+        logger.error("노트 수정 실패 (id=%s): %s", note_id, e)
+        return None
+
+
 def delete_note(note_id: str) -> bool:
     """노트 삭제. 성공 시 True"""
     try:
