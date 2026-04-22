@@ -21,3 +21,18 @@ export async function DELETE(
   });
   return new NextResponse(null, { status: res.status });
 }
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { name: string } }
+) {
+  const encodedName = encodeURIComponent(params.name);
+  const body = await request.text();
+  const res = await fetch(`${BACKEND}/api/categories/${encodedName}`, {
+    method: "PATCH",
+    headers: { ...backendHeaders(), "Content-Type": "application/json" },
+    body,
+  });
+  const data = await res.json();
+  return NextResponse.json(data, { status: res.status });
+}

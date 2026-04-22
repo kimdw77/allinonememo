@@ -51,3 +51,29 @@ def delete_category(name: str) -> bool:
     except Exception as e:
         logger.error("카테고리 삭제 실패 (name=%s): %s", name, e)
         return False
+
+
+def rename_category(old_name: str, new_name: str, new_icon: Optional[str] = None) -> Optional[dict]:
+    """
+    카테고리 이름·아이콘 변경.
+    categories 테이블과 notes 테이블(category 컬럼)을 동시에 업데이트.
+    '기타' 이름 변경 불가.
+    """
+    if old_name == "기타":
+        return None
+    try:
+        db = get_db()
+        update_fields: dict = {"name": new_name}
+        if new_icon is not None:
+            update_fields["icon"] = new_icon
+
+        result = db.table("categories").update(update_fields).eq("name", old_name).execute()
+        if not result.data:
+            return None
+
+        # notes 테이블의 category도 동기화
+        db.table("notes").update({"category": new_name}).eq("category", old_name).execute()
+        return result.data[0]
+    except Exception as e:
+        logger.error("카테고리 이름 변경 실패 (%s → %s): %s", old_name, new_name, e)
+        return None

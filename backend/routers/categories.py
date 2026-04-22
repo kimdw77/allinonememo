@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path
 from pydantic import BaseModel, Field
 
 from dependencies.auth import require_api_key
-from db.categories import get_categories, insert_category, delete_category
+from db.categories import get_categories, insert_category, delete_category, rename_category
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_api_key)])
@@ -42,3 +42,19 @@ async def remove_category(name: str = Path(..., max_length=30)):
     success = delete_category(name)
     if not success:
         raise HTTPException(status_code=404, detail="카테고리를 찾을 수 없습니다")
+
+
+class CategoryUpdate(BaseModel):
+    new_name: str = Field(..., min_length=1, max_length=30)
+    icon: str | None = Field(None, max_length=10)
+
+
+@router.patch("/{name}")
+async def update_category(body: CategoryUpdate, name: str = Path(..., max_length=30)):
+    """카테고리 이름·아이콘 변경 (연결된 노트 category도 자동 업데이트)"""
+    if name == "기타":
+        raise HTTPException(status_code=400, detail="'기타' 카테고리는 변경할 수 없습니다")
+    result = rename_category(old_name=name, new_name=body.new_name, new_icon=body.icon)
+    if not result:
+        raise HTTPException(status_code=404, detail="카테고리를 찾을 수 없거나 변경 실패")
+    return result
