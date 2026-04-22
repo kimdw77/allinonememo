@@ -3,11 +3,11 @@ digest.py — RSS 일일 요약 서비스
 어제 수집된 RSS 노트를 Claude로 카테고리별 요약 후 텔레그램으로 전송
 """
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import anthropic
 
-from config import settings
+from config import settings, KST
 from db.client import get_db
 
 logger = logging.getLogger(__name__)
@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
 # KST = UTC+9
-KST = timezone(timedelta(hours=9))
 
 DIGEST_PROMPT = """다음은 오늘 수집된 RSS 뉴스/기사 목록이다. 카테고리별로 핵심 내용을 간결하게 요약하라.
 

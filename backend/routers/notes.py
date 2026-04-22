@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from dependencies.auth import require_api_key
 from models import NoteCreate, NoteResponse
 from services.classifier import classify_content
-from db.notes import insert_note, get_notes, get_note_by_id, delete_note, vector_search_notes
+from db.notes import insert_note, get_notes, get_note_by_id, delete_note, vector_search_notes, get_related_notes, get_graph_data
 
 logger = logging.getLogger(__name__)
 router = APIRouter(dependencies=[Depends(require_api_key)])
@@ -55,6 +55,18 @@ async def create_note(body: NoteCreate):
     if not note:
         raise HTTPException(status_code=500, detail="노트 저장에 실패했습니다")
     return note
+
+
+@router.get("/graph")
+async def graph_data(limit: int = Query(200, ge=10, le=500)):
+    """그래프 시각화용 노드·엣지 데이터 반환"""
+    return get_graph_data(limit=limit)
+
+
+@router.get("/{note_id}/related", response_model=list[NoteResponse])
+async def related_notes(note_id: str, limit: int = Query(5, ge=1, le=20)):
+    """키워드 기반 연관 노트 조회"""
+    return get_related_notes(note_id=note_id, limit=limit)
 
 
 @router.get("/search/vector", response_model=list[NoteResponse])

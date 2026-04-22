@@ -113,6 +113,95 @@ def vector_search_notes(query_vector: list[float], limit: int = 10) -> list[dict
         return []
 
 
+def get_related_notes(note_id: str, limit: int = 5) -> list[dict]:
+    """
+    키워드 겹침 기반 연관 노트 조회.
+    같은 카테고리 + 공통 키워드가 많은 순으로 반환.
+    """
+    try:
+        db = get_db()
+        # 기준 노트 조회
+        base = db.table("notes").select("keywords,category").eq("id", note_id).single().execute()
+        if not base.data:
+            return []
+
+        keywords = base.data.get("keywords") or []
+        category = base.data.get("category", "")
+
+        if not keywords:
+            # 키워드 없으면 같은 카테고리 노트 반환
+            result = db.table("notes").select(
+                "id,summary,keywords,category,content_type,url,created_at"
+            ).eq("category", category).neq("id", note_id).limit(limit).execute()
+            return result.data or []
+
+        # 키워드 배열 중 하나라도 겹치는 노트 조회 (PostgreSQL @> 연산자)
+        # PostgREST: keywords 배열에 any 매칭
+        result = db.table("notes").select(
+            "id,summary,keywords,category,content_type,url,created_at"
+        ).neq("id", note_id).overlaps("keywords", keywords).limit(limit * 3).execute()
+
+        notes = result.data or []
+
+        # 공통 키워드 수로 정렬
+        keyword_set = set(keywords)
+        scored = sorted(
+            notes,
+            key=lambda n: len(keyword_set & set(n.get("keywords") or [])),
+            reverse=True,
+        )
+        return scored[:limit]
+
+    except Exception as e:
+        logger.error("연관 노트 조회 실패 (id=%s): %s", note_id, e)
+        return []
+
+
+def get_graph_data(limit: int = 200) -> dict:
+    """
+    그래프 시각화용 노드·엣지 데이터 반환.
+    노드: 노트, 엣지: 공통 키워드 2개 이상인 노트 쌍.
+    """
+    try:
+        db = get_db()
+        result = db.table("notes").select(
+            "id,summary,keywords,category,content_type,created_at"
+        ).order("created_at", desc=True).limit(limit).execute()
+
+        notes = result.data or []
+        nodes = [
+            {
+                "id": n["id"],
+                "label": (n.get("summary") or "")[:50],
+                "category": n.get("category", "기타"),
+                "content_type": n.get("content_type", "other"),
+            }
+            for n in notes
+        ]
+
+        # 엣지: 공통 키워드 2개 이상인 쌍만 연결
+        edges = []
+        for i, a in enumerate(notes):
+            kw_a = set(a.get("keywords") or [])
+            if not kw_a:
+                continue
+            for b in notes[i + 1:]:
+                kw_b = set(b.get("keywords") or [])
+                common = kw_a & kw_b
+                if len(common) >= 2:
+                    edges.append({
+                        "source": a["id"],
+                        "target": b["id"],
+                        "weight": len(common),
+                    })
+
+        return {"nodes": nodes, "edges": edges}
+
+    except Exception as e:
+        logger.error("그래프 데이터 조회 실패: %s", e)
+        return {"nodes": [], "edges": []}
+
+
 def delete_note(note_id: str) -> bool:
     """노트 삭제. 성공 시 True"""
     try:

@@ -135,10 +135,6 @@ def sync_note_to_notion(note: dict) -> bool:
     단일 노트를 Notion에 동기화.
     성공 시 True 반환.
     """
-    if not settings.NOTION_TOKEN or not settings.NOTION_DATABASE_ID:
-        logger.debug("Notion 설정 없음, 동기화 건너뜀")
-        return False
-
     try:
         import httpx
         body = _build_page_body(note)

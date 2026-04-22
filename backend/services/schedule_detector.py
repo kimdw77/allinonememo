@@ -5,12 +5,12 @@ Claude API를 사용하여 자연어 일정을 파싱 후 Google Calendar 형식
 import json
 import logging
 import re
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from typing import Optional
 
 import anthropic
 
-from config import settings
+from config import settings, KST
 
 logger = logging.getLogger(__name__)
 
@@ -23,8 +23,6 @@ _SCHEDULE_KEYWORDS = (
     "예약", "미팅", "회의", "약속", "일정", "스케줄", "meeting", "appointment",
 )
 
-# 한국 표준시 (UTC+9)
-KST = timezone(timedelta(hours=9))
 
 SCHEDULE_PROMPT = """다음 메시지가 일정·약속·예약 내용인지 판단하고 JSON으로만 응답하라. 부가 설명 없이 JSON만.
 

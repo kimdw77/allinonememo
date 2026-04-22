@@ -54,3 +54,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# 공통 상수
+from datetime import timezone, timedelta
+KST = timezone(timedelta(hours=9))
