@@ -12,7 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from config import settings
-from routers import webhook, notes, rss, categories, sync, stats
+from routers import webhook, notes, rss, categories, sync, stats, tasks
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,7 @@ app.include_router(rss.router, prefix="/api/rss", tags=["rss"])
 app.include_router(categories.router, prefix="/api/categories", tags=["categories"])
 app.include_router(sync.router, prefix="/api/sync", tags=["sync"])
 app.include_router(stats.router, prefix="/api/stats", tags=["stats"])
+app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 
 
 @app.on_event("startup")
@@ -71,15 +72,15 @@ def start_scheduler() -> None:
     # Google Drive 백업: 매주 일요일 새벽 2시 KST
     from services.gdrive_backup import backup_notes_to_drive
     scheduler.add_job(backup_notes_to_drive, "cron", day_of_week="sun", hour=2, minute=0, id="gdrive_backup")
-    # 주간 AI 인사이트: 매주 월요일 오전 9시 KST
-    from services.weekly_insight import send_weekly_insight
+    # 주간 보고서: 매주 월요일 오전 9시 KST (노트 + 태스크 통합)
+    from agents.weekly_report import send_weekly_report
     import asyncio
     scheduler.add_job(
-        lambda: asyncio.run(send_weekly_insight()),
-        "cron", day_of_week="mon", hour=9, minute=0, id="weekly_insight",
+        lambda: asyncio.run(send_weekly_report()),
+        "cron", day_of_week="mon", hour=9, minute=0, id="weekly_report",
     )
     scheduler.start()
-    logger.info("스케줄러 시작 (RSS 30분, 일일 요약 08:00, Drive 백업 일요일 02:00, 주간 인사이트 월요일 09:00)")
+    logger.info("스케줄러 시작 (RSS 30분, 일일 요약 08:00, Drive 백업 일요일 02:00, 주간 보고서 월요일 09:00)")
 
 
 @app.get("/health")

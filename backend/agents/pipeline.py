@@ -1,0 +1,181 @@
+"""
+agents/pipeline.py — 에이전트 파이프라인 오케스트레이터 (Critic 게이트키퍼 포함)
+
+runPipeline(inp, trace_id) 가 단일 진입점.
+RouterAgent 는 의도 분류만 담당하고, 게이트 결정·저장은 이 모듈이 처리한다.
+
+파이프라인 흐름:
+  ① insert_thought (status=pending)
+  ② RouterAgent.classify_intent()
+     → search/question/command: 즉시 "준비 중" 반환
+  ③ MemoAgent.analyze()
+  ④ TaskExtractorAgent.analyze()
+  ⑤ CriticAgent.review()  ← 게이트키퍼 결정
+     → "reject"          : thoughts(manual_review) → 거부 메시지
+     → "ask_user"        : thoughts(pending_user_confirm) → 확인 요청 메시지
+     → "save"            : SaveExecutor.save_memo()
+     → "save_with_tasks" : save_memo() + save_tasks()
+  ⑥ SaveExecutor.save_agent_run()
+  ⑦ update_thought (status=processed)
+"""
+import logging
+from typing import Optional
+
+from agents.base import AgentInput, AgentOutput
+from utils.trace_id import set_trace_id
+
+logger = logging.getLogger(__name__)
+
+# 즉시 "준비 중" 응답을 반환하는 의도 (thoughts 기록 없음)
+_UNSUPPORTED_INTENTS = {"search", "question", "command"}
+_UNSUPPORTED_LABELS = {
+    "search": "검색",
+    "question": "질문 답변",
+    "command": "명령 실행",
+}
+
+
+class AgentPipeline:
+    def run(self, inp: AgentInput, trace_id: str) -> AgentOutput:
+        from agents.router import RouterAgent
+        from agents.memo import MemoAgent
+        from agents.task_extractor import TaskExtractorAgent
+        from agents.critic import CriticAgent
+        from executors.save_executor import SaveExecutor
+        from db.thoughts import insert_thought, update_thought_status
+
+        set_trace_id(trace_id)
+
+        # ── ① 입력 원본 기록 ───────────────────────────────────────
+        thought = insert_thought(
+            raw_input=inp.content,
+            trace_id=trace_id,
+            source=inp.source,
+            status="pending",
+        )
+        thought_id: Optional[str] = thought["id"] if thought else None
+
+        # ── ② 의도 분류 ───────────────────────────────────────────
+        intent_data = RouterAgent().classify_intent(inp.content)
+        intent = intent_data.get("intent", "memo")
+        confidence = float(intent_data.get("confidence", 0.5))
+        logger.info(
+            "Pipeline | trace=%s intent=%s conf=%.2f",
+            trace_id[:8], intent, confidence,
+        )
+
+        # 미지원 의도 → thoughts 기록 없이 즉시 반환
+        if intent in _UNSUPPORTED_INTENTS:
+            label = _UNSUPPORTED_LABELS.get(intent, intent)
+            return AgentOutput(
+                agent_name="pipeline",
+                success=True,
+                result={"intent": intent, "trace_id": trace_id},
+                reply_text=(
+                    f"🚧 *{label}* 기능은 아직 지원 준비 중입니다.\n"
+                    f"🔎 trace: {trace_id[:8]}"
+                ),
+            )
+
+        # ── ③ Memo 분석 ────────────────────────────────────────────
+        memo_result = MemoAgent().analyze(inp)
+
+        # ── ④ Task 분석 ────────────────────────────────────────────
+        task_result = TaskExtractorAgent().analyze(inp)
+
+        # ── ⑤ Critic 게이트 결정 ──────────────────────────────────
+        critic_result = CriticAgent().review(inp, memo_result, task_result, intent_data)
+        final_action: str = critic_result.get("final_action", "save")
+        needs_confirmation: bool = critic_result.get("needs_user_confirmation", False)
+        issues: list[str] = critic_result.get("issues", [])
+        suggested_fixes: list[str] = critic_result.get("suggested_fixes", [])
+
+        # ── ⑥ 게이트 분기 ─────────────────────────────────────────
+
+        if final_action == "reject":
+            update_thought_status(thought_id, "manual_review", issues, suggested_fixes)
+            issue_text = issues[0] if issues else "처리할 수 없는 입력입니다"
+            return AgentOutput(
+                agent_name="pipeline",
+                success=True,
+                result={"intent": intent, "final_action": "reject", "trace_id": trace_id},
+                reply_text=(
+                    f"❌ 자동 처리 불가: {issue_text}\n"
+                    f"수동 검토로 표시했습니다.\n"
+                    f"🔎 trace: {trace_id[:8]}"
+                ),
+            )
+
+        if final_action == "ask_user":
+            update_thought_status(thought_id, "pending_user_confirm", issues, suggested_fixes)
+            issue_text = issues[0] if issues else "확인이 필요합니다"
+            # TODO: /yes /no 명령 핸들러 (다음 단계에서 구현)
+            return AgentOutput(
+                agent_name="pipeline",
+                success=True,
+                result={
+                    "intent": intent,
+                    "final_action": "ask_user",
+                    "thought_id": thought_id,
+                    "trace_id": trace_id,
+                },
+                reply_text=(
+                    f"⚠️ 확인 필요: {issue_text}\n"
+                    f"저장하시겠습니까? /yes /no\n"
+                    f"🔎 trace: {trace_id[:8]}"
+                ),
+            )
+
+        # ── ⑦ 저장 (save / save_with_tasks) ──────────────────────
+        executor = SaveExecutor()
+
+        note = executor.save_memo(memo_result, inp, trace_id)
+        note_id: Optional[str] = note["id"] if note else None
+
+        saved_tasks: list[dict] = []
+        if final_action == "save_with_tasks" and task_result.get("has_tasks"):
+            saved_tasks = executor.save_tasks(
+                note_id, task_result.get("tasks", []), inp.source, trace_id
+            )
+
+        executor.save_agent_run(
+            input_text=inp.content,
+            intent=intent,
+            confidence=confidence,
+            final_action=final_action,
+            needs_user_confirmation=needs_confirmation,
+            issues=issues,
+            note_id=note_id,
+            has_tasks=task_result.get("has_tasks", False),
+            task_count=len(saved_tasks),
+            source=inp.source,
+            trace_id=trace_id,
+        )
+
+        update_thought_status(thought_id, "processed")
+
+        # ── ⑧ 응답 메시지 ─────────────────────────────────────────
+        title = (memo_result.get("title") or memo_result.get("summary") or inp.content)[:50]
+
+        if saved_tasks:
+            reply = f"✅ 저장 완료: {title} (할 일 {len(saved_tasks)}건 추가)"
+        else:
+            reply = f"✅ 저장 완료: {title}"
+
+        if needs_confirmation and issues:
+            reply += f"\n⚠️ {' | '.join(issues[:2])}"
+
+        reply += f"\n🔎 trace: {trace_id[:8]}"
+
+        return AgentOutput(
+            agent_name="pipeline",
+            success=note is not None,
+            result={
+                "intent": intent,
+                "final_action": final_action,
+                "note_id": note_id,
+                "trace_id": trace_id,
+                "has_tasks": task_result.get("has_tasks", False),
+            },
+            reply_text=reply,
+        )

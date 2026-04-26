@@ -19,6 +19,7 @@ def insert_note(
     content_type: str = "other",
     url: Optional[str] = None,
     metadata: Optional[dict] = None,
+    trace_id: Optional[str] = None,
 ) -> Optional[dict]:
     """노트 저장. 성공 시 생성된 레코드 반환, 실패 시 None"""
     try:
@@ -46,6 +47,8 @@ def insert_note(
         }
         if embedding is not None:
             row["embedding"] = embedding
+        if trace_id:
+            row["trace_id"] = trace_id
 
         result = db.table("notes").insert(row).execute()
         return result.data[0] if result.data else None

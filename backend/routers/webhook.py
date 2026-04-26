@@ -1,6 +1,6 @@
 """
 routers/webhook.py — 카카오·텔레그램 메시지 수신 처리
-비즈니스 로직 없음: 수신 → services/classifier → db/notes 호출
+비즈니스 로직 없음: 수신 → agents/router → 각 에이전트 호출
 """
 import hashlib
 import hmac
@@ -12,9 +12,7 @@ from fastapi import APIRouter, Request, Response, HTTPException
 import httpx
 
 from config import settings
-from services.classifier import classify_content
-from services.fetcher import fetch_url_content
-from db.notes import insert_note, get_notes, get_stats
+from db.notes import get_notes, get_stats
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -106,17 +104,15 @@ async def telegram_webhook(request: Request) -> Response:
             url = text[offset: offset + length]
             break
 
-    await _process_and_save(
-        source="telegram",
-        raw_content=text,
-        url=url,
+    await _run_router_agent(
+        content=text,
+        chat_id=chat_id,
         metadata={
             "chat_id": chat_id,
             "message_id": message.get("message_id"),
+            "url": url,
         },
     )
-    await _send_telegram(chat_id, "✅ 노트가 저장되었습니다!")
-
     return Response(status_code=200)
 
 
@@ -271,21 +267,62 @@ async def _handle_command(text: str, chat_id: int | None) -> None:
             logger.error("/일정 처리 실패: %s", e)
             await _send_telegram(chat_id, "❌ 일정 등록 중 오류가 발생했습니다.")
 
+    elif cmd in ("/task", "/task@myvaultbot"):
+        # TaskExtractorAgent 강제 실행 (Router 의도 분류 없이)
+        if not arg:
+            await _send_telegram(chat_id, "사용법: `/task 내일까지 보고서 제출, 다음주 팀미팅 잡기`")
+            return
+        from agents.task_extractor import TaskExtractorAgent
+        from agents.base import AgentInput
+        out = TaskExtractorAgent().run(AgentInput(
+            content=arg, source="telegram",
+            chat_id=chat_id, metadata={"chat_id": chat_id},
+        ))
+        await _send_telegram(chat_id, out.reply_text or "⚠️ 추출된 태스크가 없습니다.")
+
+    elif cmd in ("/critique", "/critique@myvaultbot"):
+        # CriticAgent 강제 실행
+        if not arg:
+            await _send_telegram(chat_id, "사용법: `/critique 검토받을 내용`")
+            return
+        from agents.critic import CriticAgent
+        from agents.base import AgentInput
+        out = CriticAgent().run(AgentInput(
+            content=arg, source="telegram",
+            chat_id=chat_id, metadata={"chat_id": chat_id},
+        ))
+        await _send_telegram(chat_id, out.reply_text or "❌ 분석 실패")
+
+    elif cmd in ("/report", "/report@myvaultbot"):
+        # WeeklyReportAgent 강제 실행
+        from agents.weekly_report import WeeklyReportAgent
+        from agents.base import AgentInput
+        out = WeeklyReportAgent().run(AgentInput(
+            content="", source="telegram",
+            chat_id=chat_id, metadata={"chat_id": chat_id},
+        ))
+        await _send_telegram(chat_id, out.reply_text or "❌ 보고서 생성 실패")
+
     elif cmd in ("/help", "/help@myvaultbot", "/start"):
         help_text = (
-            "🤖 *MyVault 봇 명령어*\n\n"
+            "🤖 *MyVault 에이전트 명령어*\n\n"
+            "🧠 *AI 에이전트*\n"
+            "/task `내용` — 태스크 추출·저장\n"
+            "/critique `내용` — 비판적 검토·피드백\n"
+            "/report — 주간 보고서 생성\n\n"
+            "📅 *일정·검색*\n"
             "/cal `내용` — Google Calendar 등록\n"
             "/search `키워드` — 노트 검색\n"
             "/list — 최근 5개 노트\n"
             "/today — 오늘 저장된 노트\n"
             "/stats — 통계 요약\n"
             "/help — 이 메시지\n\n"
-            "명령어 없이 텍스트/링크/사진/음성을 보내면 MyVault에 저장됩니다."
+            "명령어 없이 텍스트/링크/사진/음성을 보내면 AI가 자동 분류합니다."
         )
         await _send_telegram(chat_id, help_text)
 
     else:
-        await _send_telegram(chat_id, f"알 수 없는 명령어입니다. /help 로 명령어를 확인하세요.")
+        await _send_telegram(chat_id, "알 수 없는 명령어입니다. /help 로 명령어를 확인하세요.")
 
 
 async def _download_telegram_file(file_id: str) -> tuple[bytes, str]:
@@ -385,9 +422,9 @@ async def _handle_voice(message: dict, chat_id: int | None) -> None:
             await _send_telegram(chat_id, "❌ 음성 인식 실패 (OPENAI_API_KEY 확인 필요)")
             return
 
-        await _process_and_save(
-            source="telegram",
-            raw_content=transcribed,
+        await _run_router_agent(
+            content=transcribed,
+            chat_id=chat_id,
             metadata={
                 "chat_id": chat_id,
                 "message_id": message.get("message_id"),
@@ -395,39 +432,30 @@ async def _handle_voice(message: dict, chat_id: int | None) -> None:
             },
         )
 
-        preview = transcribed[:100]
-        await _send_telegram(chat_id, f"🎙️ 음성이 저장되었습니다!\n_{preview}_")
-
     except Exception as e:
         logger.error("음성 처리 실패: %s", e)
         await _send_telegram(chat_id, "❌ 음성 처리 중 오류가 발생했습니다.")
 
 
-async def _process_and_save(
-    source: str,
-    raw_content: str,
-    url: str | None = None,
+async def _run_router_agent(
+    content: str,
+    chat_id: int | None,
     metadata: dict | None = None,
+    source: str = "telegram",
 ) -> None:
-    """Claude 분류 후 Supabase 저장 (에러 발생 시 raw_content만 저장)"""
-    # URL이 있으면 본문 크롤링 후 분류에 활용
-    content_for_classify = raw_content
-    if url:
-        fetched = fetch_url_content(url)
-        if fetched:
-            content_for_classify = fetched
-            logger.info("URL 본문 추출 성공: %s (%d자)", url, len(fetched))
+    """AgentPipeline 실행 후 결과 텔레그램 전송"""
+    from agents.pipeline import AgentPipeline
+    from agents.base import AgentInput
+    from utils.trace_id import new_trace_id
 
-    classify_result = classify_content(content_for_classify)
-
-    insert_note(
-        source=source,
-        raw_content=raw_content,
-        summary=classify_result.get("summary", ""),
-        highlights=classify_result.get("highlights", []),
-        keywords=classify_result.get("keywords", []),
-        category=classify_result.get("category", "기타"),
-        content_type=classify_result.get("content_type", "other"),
-        url=url,
-        metadata=metadata,
+    trace_id = new_trace_id()
+    out = AgentPipeline().run(
+        inp=AgentInput(
+            content=content,
+            source=source,
+            chat_id=chat_id,
+            metadata=metadata or {},
+        ),
+        trace_id=trace_id,
     )
+    await _send_telegram(chat_id, out.reply_text or "✅ 처리 완료")
