@@ -99,19 +99,26 @@ def classify_content(content: str) -> dict:
         return _FALLBACK.copy()
 
 
-IMAGE_PROMPT = """이 이미지의 내용을 분석하여 JSON으로만 응답하라. 부가 설명 없이 JSON만.
+IMAGE_PROMPT = """이 이미지를 분석하여 JSON으로만 응답하라. 부가 설명 없이 JSON만.
 
-{{"summary":"2-3문장 핵심 요약","highlights":["핵심문장1","핵심문장2"],"keywords":["키1","키2","키3","키4","키5"],"category":"카테고리","content_type":"article|video|memo|link|other","ocr_text":"이미지에서 추출한 텍스트 전체(텍스트가 없으면 빈 문자열)"}}
+분석 우선순위:
+1. 텍스트가 있는 이미지(문서·기사·잡지·책·메모·명함·영수증 등)는 텍스트를 최대한 정확하게 추출한다.
+2. 기울어지거나 촬영된 문서도 텍스트를 읽어낸다.
+3. 텍스트 기반 이미지는 content_type을 "article"로 분류한다.
+
+{{"summary":"핵심 내용 3-5문장 요약 (텍스트 이미지는 기사/문서 내용 중심으로)","highlights":["핵심문장1","핵심문장2","핵심문장3"],"keywords":["키1","키2","키3","키4","키5","키6","키7"],"category":"카테고리","content_type":"article|image|memo|other","ocr_text":"이미지에서 읽은 텍스트 전체. 문서·기사·책 등은 본문을 가능한 완전하게 추출하라. 텍스트 없는 사진은 빈 문자열."}}
 
 카테고리: {categories}
 카테고리 포함 범위: 건강(스포츠·운동·피트니스·헬스 포함)
-keywords: 핵심 키워드 5~7개. 고유명사·브랜드명·핵심 개념 우선."""
+keywords: 핵심 키워드 5~7개. 고유명사·브랜드명·핵심 개념 우선.
+highlights: 가장 중요한 문장 3개 원문 그대로 발췌."""
 
 
 def analyze_image(image_bytes: bytes, media_type: str) -> dict:
     """
     Claude Vision으로 이미지 OCR + 분류.
     media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp'
+    문서·잡지·책 촬영 이미지도 텍스트 추출 가능.
     """
     import base64
     import re
@@ -122,7 +129,7 @@ def analyze_image(image_bytes: bytes, media_type: str) -> dict:
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=700,
+            max_tokens=2000,  # 문서 전체 OCR을 위해 충분히 확보
             messages=[{
                 "role": "user",
                 "content": [
