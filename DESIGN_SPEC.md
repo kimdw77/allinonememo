@@ -486,7 +486,44 @@ python -X utf8 backend/tests/scenarios.py
 
 ---
 
-## 14. 추후 과제
+## 14. Phase 8 추가 기능 (2026-04-26)
+
+### 할일 대시보드 (`/tasks` 페이지)
+
+```
+frontend/app/tasks/page.tsx           태스크 목록·상태변경·삭제 UI
+frontend/app/api/tasks/route.ts       GET /api/tasks 프록시
+frontend/app/api/tasks/[id]/route.ts  PATCH·DELETE 프록시
+frontend/app/page.tsx                 헤더 ☑️ → /tasks 링크 추가
+```
+
+- 전체 / 할 일 / 진행 중 / 완료 탭 필터 + 요약 카드
+- 우선순위 자동 정렬 (🔴높음 → 🟡보통 → 🟢낮음)
+- 원형 버튼 클릭 → 상태 순환 (todo → in_progress → done)
+- × 버튼 삭제
+
+### Google Calendar 자동 감지 (파이프라인 통합)
+
+`agents/pipeline.py` — save 성공 직후 실행:
+- `detect_schedule(inp.content)` — 일정 키워드 사전 필터 → Claude 파싱
+- 일정 감지 시 `create_event()` 호출 → 응답에 `📅 캘린더 등록: {title}` 추가
+- Google Calendar 환경변수 미설정 or 실패 시 조용히 무시 (파이프라인 중단 없음)
+
+### PWA 아이콘 + iOS 설치
+
+```
+frontend/public/apple-touch-icon.png  180×180 iPhone 홈 화면 아이콘
+frontend/public/icon-192.png          192×192 manifest 아이콘
+frontend/public/icon-512.png          512×512 manifest 아이콘
+```
+
+디자인: 인디고(#6366f1) 배경 + 흰색 MV 텍스트  
+iOS 설치: Safari → `allinonememo.vercel.app` → 공유(□↑) → 홈 화면에 추가  
+iOS 위젯: PWA 불가, Scriptable 앱($6.99)으로 JavaScript 위젯 대체 가능
+
+---
+
+## 15. 추후 과제
 
 | 우선순위 | 과제 |
 |----------|------|
@@ -496,7 +533,8 @@ python -X utf8 backend/tests/scenarios.py
 | 🟡 | Router `search` 의도 구현 — 벡터 검색 연동 |
 | 🟡 | Router `question` 의도 구현 — RAG 기반 Q&A |
 | 🟡 | Critic `ask_user` — 텔레그램 인라인 버튼으로 사용자 확인 요청 |
-| 🟡 | 태스크 웹 대시보드 UI (프론트엔드 /tasks 페이지) |
+| 🟡 | Todoist 연동 — Apple Reminders 간접 연동 |
+| 🟡 | Scriptable 위젯 스크립트 — iPhone 홈 화면 할일 위젯 |
 | 🟡 | 커스텀 도메인 연결 (myvault.kr 등) |
 | 🟢 | Router `command` 의도 구현 — 자연어 명령 처리 |
 | 🟢 | 카카오톡 연동 |
@@ -504,7 +542,7 @@ python -X utf8 backend/tests/scenarios.py
 
 ---
 
-## 15. 주요 의존성 (backend)
+## 16. 주요 의존성 (backend)
 
 ```
 fastapi, uvicorn, supabase, anthropic, openai, httpx,
@@ -515,7 +553,7 @@ python-multipart, pdfplumber, python-docx,
 pydantic-settings
 ```
 
-## 16. Railway 배포 특이사항
+## 17. Railway 배포 특이사항
 
 - Railpack ENV 캐싱 버그 → Dockerfile 방식으로 전환
 - CMD: `${PORT:-8000}` (Railway 동적 포트 대응)
