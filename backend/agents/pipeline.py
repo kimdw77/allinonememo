@@ -154,7 +154,27 @@ class AgentPipeline:
 
         update_thought_status(thought_id, "processed")
 
-        # ── ⑧ 응답 메시지 ─────────────────────────────────────────
+        # ── ⑧ Google Calendar 자동 감지 ──────────────────────────
+        calendar_line = ""
+        try:
+            from services.schedule_detector import detect_schedule
+            from services.calendar import create_event
+            schedule = detect_schedule(inp.content)
+            if schedule and schedule.get("start"):
+                event_url = create_event(
+                    title=schedule["title"] or title,
+                    start=schedule["start"],
+                    end=schedule["end"],
+                    location=schedule.get("location", ""),
+                    description=schedule.get("description", ""),
+                )
+                if event_url:
+                    calendar_line = f"\n📅 캘린더 등록: {schedule['title'] or title}"
+                    logger.info("캘린더 자동 등록 완료: %s", event_url)
+        except Exception as cal_err:
+            logger.warning("캘린더 자동 감지 건너뜀: %s", cal_err)
+
+        # ── ⑨ 응답 메시지 ─────────────────────────────────────────
         title = (memo_result.get("title") or memo_result.get("summary") or inp.content)[:50]
 
         if saved_tasks:
@@ -165,6 +185,7 @@ class AgentPipeline:
         if needs_confirmation and issues:
             reply += f"\n⚠️ {' | '.join(issues[:2])}"
 
+        reply += calendar_line
         reply += f"\n🔎 trace: {trace_id[:8]}"
 
         return AgentOutput(

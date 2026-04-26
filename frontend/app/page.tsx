@@ -5,6 +5,7 @@
  * 무한 스크롤 + 파일 업로드 + 중복 감지 + 핀 고정 + 다중선택 + 자동완성 + 내보내기
  */
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import NoteCard from "@/components/NoteCard";
 import Sidebar from "@/components/Sidebar";
 import FileUpload from "@/components/FileUpload";
@@ -350,6 +351,15 @@ export default function DashboardPage() {
                 </ul>
               )}
             </div>
+
+            {/* 할일 대시보드 */}
+            <Link
+              href="/tasks"
+              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0 text-base"
+              title="할일 대시보드"
+            >
+              ☑️
+            </Link>
 
             {/* 파일 업로드 */}
             <button
