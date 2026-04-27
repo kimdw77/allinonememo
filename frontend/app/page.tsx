@@ -75,6 +75,18 @@ export default function DashboardPage() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  // 다크모드
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    setIsDark(document.documentElement.classList.contains("dark"));
+  }, []);
+  const toggleDark = () => {
+    const next = !isDark;
+    document.documentElement.classList.toggle("dark", next);
+    localStorage.setItem("mv-theme", next ? "dark" : "light");
+    setIsDark(next);
+  };
+
   // 모달 상태
   const [showUpload, setShowUpload] = useState(false);
   const [showDup, setShowDup] = useState(false);
@@ -305,7 +317,7 @@ export default function DashboardPage() {
   // ─── 렌더링 ──────────────────────────────────
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-slate-50 dark:bg-slate-900">
       <Sidebar
         selected={category}
         onSelect={setCategory}
@@ -316,12 +328,12 @@ export default function DashboardPage() {
 
       <main className="flex-1 min-h-screen sm:ml-60">
         {/* 헤더 */}
-        <header className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur-sm border-b border-slate-200 px-4 sm:px-8 py-3 sm:py-4">
+        <header className="sticky top-0 z-10 bg-slate-50/90 dark:bg-slate-900/90 backdrop-blur-sm border-b border-slate-200 dark:border-slate-700 px-4 sm:px-8 py-3 sm:py-4">
           <div className="max-w-3xl mx-auto flex items-center gap-2">
             {/* 햄버거 (모바일) */}
             <button
               onClick={() => setSidebarOpen(true)}
-              className="sm:hidden p-2 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0"
+              className="sm:hidden p-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0"
               aria-label="메뉴 열기"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -338,16 +350,16 @@ export default function DashboardPage() {
                 onChange={(e) => setQuery(e.target.value)}
                 onFocus={() => setShowSuggestions(true)}
                 placeholder="메모·요약·키워드 검색..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent shadow-sm"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent shadow-sm"
               />
               {/* 자동완성 드롭다운 */}
               {showSuggestions && suggestions.length > 0 && (
-                <ul className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 overflow-hidden">
+                <ul className="absolute top-full left-0 right-0 mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-20 overflow-hidden">
                   {suggestions.map((kw) => (
                     <li key={kw}>
                       <button
                         onMouseDown={(e) => { e.preventDefault(); setQuery(kw); setShowSuggestions(false); }}
-                        className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors"
+                        className="w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-indigo-50 dark:hover:bg-slate-700 hover:text-indigo-700 transition-colors"
                       >
                         <span className="text-slate-400 mr-2">🏷</span>{kw}
                       </button>
@@ -360,7 +372,7 @@ export default function DashboardPage() {
             {/* 할일 대시보드 — 클립보드 목록 */}
             <Link
               href="/tasks"
-              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0"
+              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0"
               title="할일 대시보드"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -371,7 +383,7 @@ export default function DashboardPage() {
             {/* 파일 업로드 — 위 방향 화살표 */}
             <button
               onClick={() => setShowUpload(true)}
-              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0"
+              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0"
               title="파일·이미지 업로드"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -384,7 +396,7 @@ export default function DashboardPage() {
               <button
                 onClick={() => setShowExportMenu((v) => !v)}
                 disabled={exporting}
-                className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-violet-500 hover:border-violet-300 transition-colors shadow-sm disabled:opacity-50"
+                className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-violet-500 hover:border-violet-300 transition-colors shadow-sm disabled:opacity-50"
                 title="노트 내보내기"
               >
                 {exporting ? (
@@ -398,16 +410,16 @@ export default function DashboardPage() {
                 )}
               </button>
               {showExportMenu && (
-                <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 overflow-hidden w-40">
+                <div className="absolute right-0 top-full mt-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-20 overflow-hidden w-40">
                   <button
                     onClick={() => doExport("json")}
-                    className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                   >
                     📄 JSON 내보내기
                   </button>
                   <button
                     onClick={() => doExport("markdown")}
-                    className="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    className="w-full text-left px-4 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                   >
                     📝 Markdown 내보내기
                   </button>
@@ -415,13 +427,13 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* 다중 선택 — 4개 격자 (체크박스와 전혀 다른 모양) */}
+            {/* 다중 선택 — 4개 격자 */}
             <button
               onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
               className={`p-2.5 rounded-xl border transition-colors shadow-sm shrink-0 ${
                 selectMode
-                  ? "border-indigo-400 bg-indigo-50 text-indigo-600"
-                  : "border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300"
+                  ? "border-indigo-400 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400"
+                  : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-500 hover:border-indigo-300"
               }`}
               title={selectMode ? "선택 모드 종료" : "다중 선택"}
             >
@@ -430,11 +442,11 @@ export default function DashboardPage() {
               </svg>
             </button>
 
-            {/* 일괄 재분류 — 반짝이(AI) */}
+            {/* AI 재분류 — 반짝이 */}
             <button
               onClick={bulkReclassify}
               disabled={reclassifying}
-              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-emerald-500 hover:border-emerald-300 transition-colors shadow-sm shrink-0 disabled:opacity-50"
+              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:border-emerald-300 transition-colors shadow-sm shrink-0 disabled:opacity-50"
               title={reclassifyResult || "AI 일괄 재분류"}
             >
               {reclassifying ? (
@@ -451,7 +463,7 @@ export default function DashboardPage() {
             {/* 중복 감지 — 문서 두 장 */}
             <button
               onClick={findDuplicates}
-              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-amber-500 hover:border-amber-300 transition-colors shadow-sm shrink-0"
+              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-amber-500 hover:border-amber-300 transition-colors shadow-sm shrink-0"
               title="중복 노트 감지"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -459,16 +471,33 @@ export default function DashboardPage() {
               </svg>
             </button>
 
-            {/* 새로고침 — 회전 화살표 */}
+            {/* 새로고침 */}
             <button
               onClick={() => { offsetRef.current = 0; setNotes([]); setHasMore(true); loadNotes(true); }}
               disabled={loading}
-              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm disabled:opacity-50 shrink-0"
+              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm disabled:opacity-50 shrink-0"
               title="새로고침"
             >
               <svg className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
               </svg>
+            </button>
+
+            {/* 다크모드 토글 — 해/달 */}
+            <button
+              onClick={toggleDark}
+              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0"
+              title={isDark ? "라이트 모드" : "다크 모드"}
+            >
+              {isDark ? (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+                </svg>
+              )}
             </button>
           </div>
         </header>
@@ -476,14 +505,14 @@ export default function DashboardPage() {
         {/* 노트 목록 */}
         <div className="max-w-3xl mx-auto px-4 sm:px-8 py-5 sm:py-6">
           <div className="flex items-center justify-between mb-4 sm:mb-5">
-            <h2 className="text-slate-700 font-semibold text-base">
+            <h2 className="text-slate-700 dark:text-slate-200 font-semibold text-base sm:text-base">
               {category ? category : "전체 노트"}
             </h2>
             <div className="flex items-center gap-2">
               {selectMode && selectedIds.size > 0 && (
-                <span className="text-xs text-indigo-600 font-medium">{selectedIds.size}개 선택됨</span>
+                <span className="text-sm sm:text-xs text-indigo-600 dark:text-indigo-400 font-medium">{selectedIds.size}개 선택됨</span>
               )}
-              {!loading && <span className="text-xs text-slate-400">{notes.length}개</span>}
+              {!loading && <span className="text-sm sm:text-xs text-slate-400 dark:text-slate-500">{notes.length}개</span>}
             </div>
           </div>
 
@@ -491,7 +520,7 @@ export default function DashboardPage() {
           {loading && notes.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 gap-3">
               <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-              <p className="text-slate-400 text-sm">불러오는 중...</p>
+              <p className="text-slate-400 dark:text-slate-500 text-sm">불러오는 중...</p>
             </div>
           )}
 
@@ -499,10 +528,10 @@ export default function DashboardPage() {
           {!loading && notes.length === 0 && (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="text-5xl mb-4">📭</div>
-              <p className="text-slate-500 font-medium mb-1">
+              <p className="text-slate-500 dark:text-slate-400 font-medium mb-1">
                 {query ? "검색 결과가 없습니다" : "저장된 노트가 없습니다"}
               </p>
-              <p className="text-slate-400 text-sm">
+              <p className="text-slate-400 dark:text-slate-500 text-sm">
                 {query ? "다른 키워드로 검색해보세요" : "텔레그램이나 📁 파일 업로드로 메모를 추가하세요"}
               </p>
             </div>
@@ -518,7 +547,7 @@ export default function DashboardPage() {
                   className={`absolute -top-1 -right-1 z-10 w-6 h-6 rounded-full flex items-center justify-center text-[11px] transition-all shadow-sm ${
                     pinnedIds.has(note.id)
                       ? "bg-amber-400 text-white opacity-100"
-                      : "bg-white border border-slate-200 text-slate-400 opacity-0 group-hover:opacity-100"
+                      : "bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-400 opacity-0 group-hover:opacity-100"
                   }`}
                   title={pinnedIds.has(note.id) ? "핀 해제" : "핀 고정"}
                 >
@@ -579,9 +608,9 @@ export default function DashboardPage() {
 
       {/* 다중 선택 액션 바 */}
       {selectMode && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-lg sm:left-60">
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 shadow-lg sm:left-60">
           <div className="max-w-3xl mx-auto px-4 sm:px-8 py-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm text-slate-600">
+            <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
               <span className="font-medium">{selectedIds.size}개 선택됨</span>
               <button onClick={() => setSelectedIds(new Set<string>(notes.map((n) => n.id)))} className="text-indigo-500 hover:underline text-xs">전체 선택</button>
             </div>

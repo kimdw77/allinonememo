@@ -166,19 +166,19 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
 
   return (
     <article
-      className={`bg-white rounded-xl border border-slate-200 border-l-4 ${accentClass} p-4 sm:p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200`}
+      className={`bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 border-l-4 ${accentClass} p-4 sm:p-5 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200`}
     >
       {/* 상단: 소스·카테고리 / 날짜·액션 */}
       <div className="flex flex-wrap items-center justify-between gap-y-1.5 mb-3">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-sm shrink-0">{icon}</span>
-          <span className="text-xs text-slate-400 shrink-0">{sourceLabel}</span>
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 ${badgeClass}`}>
+          <span className="text-sm sm:text-xs text-slate-400 dark:text-slate-500 shrink-0">{sourceLabel}</span>
+          <span className={`text-sm sm:text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 ${badgeClass}`}>
             {note.category}
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <time className="text-xs text-slate-400">{date}</time>
+          <time className="text-sm sm:text-xs text-slate-400 dark:text-slate-500">{date}</time>
           {/* 재분류 버튼 */}
           <button
             onClick={handleReclassify}
@@ -224,30 +224,30 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
 
       {/* 편집 폼 */}
       {editing ? (
-        <div className="mb-3 space-y-2.5 bg-slate-50 rounded-lg p-3 border border-slate-200">
+        <div className="mb-3 space-y-2.5 bg-slate-50 dark:bg-slate-700/50 rounded-lg p-3 border border-slate-200 dark:border-slate-600">
           <div>
-            <label className="text-xs text-slate-500 mb-1 block">요약</label>
+            <label className="text-sm sm:text-xs text-slate-500 dark:text-slate-400 mb-1 block">요약</label>
             <textarea
               value={editSummary}
               onChange={(e) => setEditSummary(e.target.value)}
               rows={3}
-              className="w-full text-sm text-slate-800 bg-white border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
+              className="w-full text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400 resize-none"
             />
           </div>
           <div>
-            <label className="text-xs text-slate-500 mb-1 block">키워드 (쉼표로 구분)</label>
+            <label className="text-sm sm:text-xs text-slate-500 dark:text-slate-400 mb-1 block">키워드 (쉼표로 구분)</label>
             <input
               value={editKeywords}
               onChange={(e) => setEditKeywords(e.target.value)}
-              className="w-full text-sm text-slate-800 bg-white border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
             />
           </div>
           <div>
-            <label className="text-xs text-slate-500 mb-1 block">카테고리</label>
+            <label className="text-sm sm:text-xs text-slate-500 dark:text-slate-400 mb-1 block">카테고리</label>
             <select
               value={editCategory}
               onChange={(e) => setEditCategory(e.target.value)}
-              className="w-full text-sm text-slate-800 bg-white border border-slate-200 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
             >
               {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
@@ -272,11 +272,11 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
         <>
           {/* 요약 */}
           {note.summary ? (
-            <p className="text-slate-800 text-sm leading-relaxed mb-3 font-medium">
+            <p className="text-slate-800 dark:text-slate-100 text-base sm:text-sm leading-relaxed mb-3 font-medium">
               {note.summary}
             </p>
           ) : (
-            <p className="text-slate-500 text-sm leading-relaxed mb-3 italic">
+            <p className="text-slate-500 dark:text-slate-400 text-base sm:text-sm leading-relaxed mb-3 italic">
               {note.raw_content.length > 120
                 ? note.raw_content.slice(0, 120) + "..."
                 : note.raw_content}
@@ -308,7 +308,7 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
               <img
                 src={note.file_url!}
                 alt="원본 이미지"
-                className="w-full max-h-52 object-cover rounded-lg mb-3 border border-slate-100"
+                className="w-full max-h-52 object-cover rounded-lg mb-3 border border-slate-100 dark:border-slate-700"
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
             );
@@ -328,7 +328,7 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
               href={note.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 hover:underline truncate mb-3"
+              className="flex items-center gap-1 text-sm sm:text-xs text-indigo-500 hover:text-indigo-700 dark:hover:text-indigo-300 hover:underline truncate mb-3"
             >
               <span>🔗</span>
               <span className="truncate">{note.url}</span>
@@ -341,7 +341,7 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
               {note.keywords.map((kw) => (
                 <span
                   key={kw}
-                  className="text-xs px-2 py-0.5 bg-slate-50 text-slate-500 border border-slate-200 rounded-full"
+                  className="text-sm sm:text-xs px-2 py-0.5 bg-slate-50 dark:bg-slate-700 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-600 rounded-full"
                 >
                   #{kw}
                 </span>
@@ -351,8 +351,8 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
 
           {/* 관련 기사 (신문 OCR) */}
           {note.related_links?.articles && note.related_links.articles.length > 0 && (
-            <div className="mb-2 border border-sky-100 rounded-lg p-2.5 bg-sky-50">
-              <p className="text-[11px] font-semibold text-sky-600 mb-1.5">📰 관련 기사</p>
+            <div className="mb-2 border border-sky-100 dark:border-sky-900 rounded-lg p-2.5 bg-sky-50 dark:bg-sky-900/20">
+              <p className="text-sm sm:text-[11px] font-semibold text-sky-600 dark:text-sky-400 mb-1.5">📰 관련 기사</p>
               <div className="space-y-1">
                 {note.related_links.articles.slice(0, 3).map((article, i) => (
                   <a
@@ -360,7 +360,7 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
                     href={article.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-start gap-1 text-xs text-sky-700 hover:text-sky-900 hover:underline"
+                    className="flex items-start gap-1 text-sm sm:text-xs text-sky-700 dark:text-sky-400 hover:text-sky-900 dark:hover:text-sky-200 hover:underline"
                   >
                     <span className="shrink-0 mt-0.5 text-sky-400">•</span>
                     <span className="line-clamp-1">{article.title}</span>
@@ -375,7 +375,7 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
                       key={i}
                       src={img}
                       alt=""
-                      className="h-14 w-20 object-cover rounded shrink-0 border border-sky-100"
+                      className="h-14 w-20 object-cover rounded shrink-0 border border-sky-100 dark:border-sky-900"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                     />
                   ))}
@@ -388,10 +388,10 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
 
       {/* 원문 펼치기 + 연관 노트 */}
       {!editing && note.raw_content && (
-        <div className="border-t border-slate-100 pt-2 mt-1">
+        <div className="border-t border-slate-100 dark:border-slate-700 pt-2 mt-1">
           <button
             onClick={handleExpand}
-            className="text-xs text-slate-400 hover:text-slate-600 transition-colors flex items-center gap-1"
+            className="text-sm sm:text-xs text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors flex items-center gap-1"
           >
             <svg
               className={`w-3 h-3 transition-transform ${expanded ? "rotate-90" : ""}`}
@@ -405,24 +405,24 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
           {expanded && (
             <div className="mt-3 space-y-3">
               {/* 원문 */}
-              <p className="text-xs text-slate-500 leading-relaxed whitespace-pre-wrap bg-slate-50 rounded-lg p-3">
+              <p className="text-sm sm:text-xs text-slate-500 dark:text-slate-400 leading-relaxed whitespace-pre-wrap bg-slate-50 dark:bg-slate-700 rounded-lg p-3">
                 {note.raw_content}
               </p>
 
               {/* 연관 노트 */}
               {relatedLoading && (
-                <p className="text-xs text-slate-400 text-center py-2">연관 노트 로딩 중…</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500 text-center py-2">연관 노트 로딩 중…</p>
               )}
               {!relatedLoading && related.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-slate-500 mb-2">🔗 연관 노트</p>
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-2">🔗 연관 노트</p>
                   <div className="space-y-1.5">
                     {related.map((r) => (
                       <div
                         key={r.id}
-                        className="bg-slate-50 rounded-lg px-3 py-2 border border-slate-100"
+                        className="bg-slate-50 dark:bg-slate-700 rounded-lg px-3 py-2 border border-slate-100 dark:border-slate-600"
                       >
-                        <p className="text-xs text-slate-700 leading-snug line-clamp-2">
+                        <p className="text-sm sm:text-xs text-slate-700 dark:text-slate-300 leading-snug line-clamp-2">
                           {r.summary || "(요약 없음)"}
                         </p>
                         <div className="flex flex-wrap gap-1 mt-1">
