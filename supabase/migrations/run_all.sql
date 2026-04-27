@@ -109,3 +109,13 @@ ALTER TABLE tasks      ADD COLUMN IF NOT EXISTS trace_id uuid;
 CREATE INDEX IF NOT EXISTS idx_agent_runs_trace_id ON agent_runs(trace_id);
 CREATE INDEX IF NOT EXISTS idx_notes_trace_id      ON notes(trace_id);
 CREATE INDEX IF NOT EXISTS idx_tasks_trace_id      ON tasks(trace_id);
+
+
+-- ────────────────────────────────────────────────────────────
+-- 005: related_links JSONB 컬럼 추가 (신문 OCR + 웹검색 결과)
+-- ────────────────────────────────────────────────────────────
+ALTER TABLE notes
+  ADD COLUMN IF NOT EXISTS related_links JSONB DEFAULT '{}'::jsonb;
+
+COMMENT ON COLUMN notes.related_links IS
+  '신문·기사 이미지 OCR 시 수집된 관련 웹 기사 링크 및 이미지 목록 (Tavily API)';

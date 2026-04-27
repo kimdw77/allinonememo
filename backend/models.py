@@ -15,8 +15,8 @@ class NoteCreate(BaseModel):
 
 class NoteResponse(BaseModel):
     id: str
-    source: str
-    raw_content: str
+    source: Optional[str] = None
+    raw_content: Optional[str] = None
     summary: Optional[str] = None
     highlights: Optional[list[str]] = None
     keywords: Optional[list[str]] = None

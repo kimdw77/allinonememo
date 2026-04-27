@@ -99,19 +99,20 @@ def classify_content(content: str) -> dict:
         return _FALLBACK.copy()
 
 
-IMAGE_PROMPT = """이 이미지를 분석하여 JSON으로만 응답하라. 부가 설명 없이 JSON만.
+IMAGE_PROMPT = """이 이미지를 분석하여 아래 JSON 형식으로만 응답하라. JSON 외 어떤 텍스트도 출력하지 말 것.
 
-분석 우선순위:
-1. 텍스트가 있는 이미지(문서·기사·잡지·책·메모·명함·영수증 등)는 텍스트를 최대한 정확하게 추출한다.
-2. 기울어지거나 촬영된 문서도 텍스트를 읽어낸다.
-3. 텍스트 기반 이미지는 content_type을 "article"로 분류한다.
+{{"summary":"","highlights":[],"keywords":[],"category":"","content_type":"","ocr_text":"","is_newspaper":false,"news_headline":"","search_query":""}}
 
-{{"summary":"핵심 내용 3-5문장 요약 (텍스트 이미지는 기사/문서 내용 중심으로)","highlights":["핵심문장1","핵심문장2","핵심문장3"],"keywords":["키1","키2","키3","키4","키5","키6","키7"],"category":"카테고리","content_type":"article|image|memo|other","ocr_text":"이미지에서 읽은 텍스트 전체. 문서·기사·책 등은 본문을 가능한 완전하게 추출하라. 텍스트 없는 사진은 빈 문자열."}}
-
-카테고리: {categories}
-카테고리 포함 범위: 건강(스포츠·운동·피트니스·헬스 포함)
-keywords: 핵심 키워드 5~7개. 고유명사·브랜드명·핵심 개념 우선.
-highlights: 가장 중요한 문장 3개 원문 그대로 발췌."""
+각 필드 작성 규칙:
+- summary: 이미지 핵심 내용 3-5문장 요약
+- highlights: 본문에서 중요한 문장 3개를 원문 그대로 배열로
+- keywords: 고유명사·브랜드명·핵심 개념 위주로 5-7개
+- category: 아래 목록 중 하나 선택 — {categories}
+- content_type: 신문이면 "newspaper", 일반 기사·문서이면 "article", 텍스트 없는 사진이면 "image", 메모이면 "memo", 기타 "other"
+- ocr_text: 이미지에서 읽히는 텍스트 전체를 최대한 완전하게 추출. 텍스트 없는 사진은 빈 문자열.
+- is_newspaper: 신문 페이지(다단 레이아웃·신문명·날짜 표기·기사 헤드라인 형태)이면 true, 아니면 false
+- news_headline: is_newspaper가 true일 때 가장 큰 헤드라인 제목. 아니면 빈 문자열.
+- search_query: content_type이 newspaper 또는 article이면 헤드라인+핵심어 조합의 뉴스 검색 쿼리. 아니면 빈 문자열."""
 
 
 def analyze_image(image_bytes: bytes, media_type: str) -> dict:
@@ -129,7 +130,7 @@ def analyze_image(image_bytes: bytes, media_type: str) -> dict:
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=2000,  # 문서 전체 OCR을 위해 충분히 확보
+            max_tokens=4000,  # OCR 전문 + 신문 분류 필드 포함하여 확대
             messages=[{
                 "role": "user",
                 "content": [
@@ -143,10 +144,11 @@ def analyze_image(image_bytes: bytes, media_type: str) -> dict:
         )
 
         raw = response.content[0].text if response.content else ""
+        logger.info("이미지 분석 Claude 응답 (앞200자): %s", raw[:200])
         cleaned = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
         match = re.search(r"\{.*\}", cleaned, re.DOTALL)
         if not match:
-            logger.error("이미지 분석 응답에서 JSON 추출 실패")
+            logger.error("이미지 분석 응답에서 JSON 추출 실패. 응답 길이=%d, 내용: %s", len(raw), raw[:300])
             return _FALLBACK.copy()
 
         result = json.loads(match.group())
@@ -157,6 +159,9 @@ def analyze_image(image_bytes: bytes, media_type: str) -> dict:
             "category": result.get("category", "기타"),
             "content_type": result.get("content_type", "other"),
             "ocr_text": result.get("ocr_text", ""),
+            "is_newspaper": bool(result.get("is_newspaper", False)),
+            "news_headline": result.get("news_headline", ""),
+            "search_query": result.get("search_query", ""),
         }
 
     except Exception as e:

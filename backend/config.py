@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     # OpenAI (Whisper 음성 인식)
     OPENAI_API_KEY: str = ""
 
+    # Tavily (신문·기사 관련 웹검색)
+    TAVILY_API_KEY: str = ""
+
     # API 보안: 백엔드 내부 API 호출에 사용하는 시크릿 키
     API_SECRET_KEY: str
 

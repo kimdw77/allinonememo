@@ -351,7 +351,7 @@ async def _download_telegram_file(file_id: str) -> tuple[bytes, str]:
 
 
 async def _handle_photo(message: dict, chat_id: int | None) -> None:
-    """사진 메시지: 다운로드 → Claude Vision 분석 → 저장"""
+    """사진 메시지: 다운로드 → Claude Vision 분석 → (신문이면 웹검색) → 저장"""
     # photo 배열의 마지막 요소가 최고 해상도
     photos = message.get("photo")
     if photos:
@@ -381,6 +381,26 @@ async def _handle_photo(message: dict, chat_id: int | None) -> None:
         # raw_content: 캡션 → OCR 텍스트 → 요약 순 우선
         raw_content = caption or result.get("ocr_text") or result.get("summary") or "[이미지]"
 
+        # 신문·기사 이미지이면 관련 링크·이미지 웹검색
+        related_links: dict = {}
+        is_news = result.get("is_newspaper") or result.get("content_type") in ("newspaper", "article")
+        search_query = (
+            result.get("search_query")
+            or result.get("news_headline")
+            or " ".join(result.get("keywords", [])[:4])
+        )
+        if is_news and search_query:
+            try:
+                from services.news_searcher import search_related_articles
+                related_links = await search_related_articles(search_query)
+                logger.info("관련 기사 검색 완료: %d건", len(related_links.get("articles", [])))
+            except Exception as search_err:
+                logger.error("관련 기사 검색 실패 (저장은 계속): %s", search_err)
+
+        content_type = result.get("content_type", "image")
+        if result.get("is_newspaper"):
+            content_type = "newspaper"
+
         from db.notes import insert_note
         insert_note(
             source="telegram",
@@ -389,16 +409,40 @@ async def _handle_photo(message: dict, chat_id: int | None) -> None:
             highlights=result.get("highlights", []),
             keywords=result.get("keywords", []),
             category=result.get("category", "기타"),
-            content_type="image",
+            content_type=content_type,
+            related_links=related_links,
             metadata={
                 "chat_id": chat_id,
                 "message_id": message.get("message_id"),
                 "caption": caption,
+                "news_headline": result.get("news_headline", ""),
+                "search_query": search_query if is_news else "",
             },
         )
 
-        preview = (result.get("summary") or "")[:100]
-        await _send_telegram(chat_id, f"🖼️ 이미지가 저장되었습니다!\n{preview}")
+        # 텔레그램 응답: 신문이면 요약 3줄 + 관련 링크, 일반 이미지면 간단 확인
+        if is_news:
+            lines: list[str] = ["📰 *신문 기사 저장 완료!*\n"]
+
+            highlights = result.get("highlights", [])
+            if highlights:
+                lines.append("*요약*")
+                for i, h in enumerate(highlights[:3], 1):
+                    lines.append(f"{i}. {h[:90]}")
+
+            articles = related_links.get("articles", [])
+            if articles:
+                lines.append("\n*관련 기사*")
+                for a in articles[:3]:
+                    title = (a.get("title") or "")[:45]
+                    url = a.get("url", "")
+                    if title and url:
+                        lines.append(f"• [{title}]({url})")
+
+            await _send_telegram(chat_id, "\n".join(lines))
+        else:
+            preview = (result.get("summary") or "")[:100]
+            await _send_telegram(chat_id, f"🖼️ 이미지가 저장되었습니다!\n{preview}")
 
     except Exception as e:
         logger.error("이미지 처리 실패: %s", e)
