@@ -163,8 +163,8 @@ def _is_allowed_user(user_id: str) -> bool:
     return user_id == settings.TELEGRAM_ALLOWED_USER_ID
 
 
-async def _send_telegram(chat_id: int | None, text: str) -> None:
-    """텔레그램 메시지 전송 (Markdown 지원). 실패 시 로그만 남김."""
+async def _send_telegram(chat_id: int | None, text: str, parse_mode: str = "Markdown") -> None:
+    """텔레그램 메시지 전송. 실패 시 로그만 남김."""
     if not chat_id or not settings.TELEGRAM_BOT_TOKEN:
         return
     try:
@@ -173,7 +173,7 @@ async def _send_telegram(chat_id: int | None, text: str) -> None:
             await client.post(url, json={
                 "chat_id": chat_id,
                 "text": text,
-                "parse_mode": "Markdown",
+                "parse_mode": parse_mode,
             })
     except Exception as e:
         logger.error("텔레그램 메시지 전송 실패: %s", e)
@@ -530,24 +530,25 @@ async def _handle_photo(message: dict, chat_id: int | None) -> None:
 
         # 텔레그램 응답: 신문이면 요약 3줄 + 관련 링크, 일반 이미지면 간단 확인
         if is_news:
-            lines: list[str] = ["📰 *신문 기사 저장 완료!*\n"]
+            import html as html_lib
+            lines: list[str] = ["📰 <b>신문 기사 저장 완료!</b>\n"]
 
             highlights = result.get("highlights", [])
             if highlights:
-                lines.append("*요약*")
+                lines.append("<b>요약</b>")
                 for i, h in enumerate(highlights[:3], 1):
-                    lines.append(f"{i}. {h[:90]}")
+                    lines.append(f"{i}. {html_lib.escape(h[:90])}")
 
             articles = related_links.get("articles", [])
             if articles:
-                lines.append("\n*관련 기사*")
+                lines.append("\n📰 <b>관련 기사</b>")
                 for a in articles[:3]:
-                    title = (a.get("title") or "")[:45]
+                    title = html_lib.escape((a.get("title") or "")[:50])
                     url = a.get("url", "")
                     if title and url:
-                        lines.append(f"• [{title}]({url})")
+                        lines.append(f'• <a href="{url}">{title}</a>')
 
-            await _send_telegram(chat_id, "\n".join(lines))
+            await _send_telegram(chat_id, "\n".join(lines), parse_mode="HTML")
         else:
             preview = (result.get("summary") or "")[:100]
             await _send_telegram(chat_id, f"🖼️ 이미지가 저장되었습니다!\n{preview}")
