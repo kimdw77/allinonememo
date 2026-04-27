@@ -2,17 +2,30 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── 색상 테마 변수 ── */
 :root {
   --foreground: #0f172a;
   --background: #f8fafc;
+  color-scheme: light;
 }
 
 .dark {
   --foreground: #f1f5f9;
   --background: #0f172a;
+  color-scheme: dark;
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
+}
+
+/* ── 다크모드 전역 강제 적용 (Tailwind dark: 보완) ── */
+.dark body {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
+html {
+  scroll-behavior: smooth;
 }
