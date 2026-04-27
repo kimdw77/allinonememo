@@ -20,6 +20,7 @@ interface Note {
   category: string;
   content_type: string;
   url: string | null;
+  file_url?: string | null;
   created_at: string;
   related_links?: {
     articles?: Array<{ title: string; url: string; description?: string }>;

@@ -21,6 +21,7 @@ def insert_note(
     metadata: Optional[dict] = None,
     trace_id: Optional[str] = None,
     related_links: Optional[dict] = None,
+    file_url: Optional[str] = None,
 ) -> Optional[dict]:
     """노트 저장. 성공 시 생성된 레코드 반환, 실패 시 None"""
     try:
@@ -46,6 +47,7 @@ def insert_note(
             "url": url,
             "metadata": metadata or {},
             "related_links": related_links or {},
+            "file_url": file_url,
         }
         if embedding is not None:
             row["embedding"] = embedding

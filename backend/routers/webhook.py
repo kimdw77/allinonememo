@@ -480,6 +480,14 @@ async def _handle_photo(message: dict, chat_id: int | None) -> None:
         # raw_content: 캡션 → OCR 텍스트 → 요약 순 우선
         raw_content = caption or result.get("ocr_text") or result.get("summary") or "[이미지]"
 
+        # Supabase Storage에 원본 사진 업로드
+        file_url: str | None = None
+        try:
+            from services.storage import upload_file
+            file_url = upload_file(file_bytes, "photos", ext, media_type)
+        except Exception as up_err:
+            logger.warning("사진 Storage 업로드 실패 (저장은 계속): %s", up_err)
+
         # 신문·기사 이미지이면 관련 링크·이미지 웹검색
         related_links: dict = {}
         is_news = result.get("is_newspaper") or result.get("content_type") in ("newspaper", "article")
@@ -510,6 +518,7 @@ async def _handle_photo(message: dict, chat_id: int | None) -> None:
             category=result.get("category", "기타"),
             content_type=content_type,
             related_links=related_links,
+            file_url=file_url,
             metadata={
                 "chat_id": chat_id,
                 "message_id": message.get("message_id"),
@@ -565,6 +574,17 @@ async def _handle_voice(message: dict, chat_id: int | None) -> None:
             await _send_telegram(chat_id, "❌ 음성 인식 실패 (OPENAI_API_KEY 확인 필요)")
             return
 
+        # Supabase Storage에 원본 음성 업로드
+        voice_file_url: str | None = None
+        try:
+            from services.storage import upload_file
+            voice_ext = file_path.rsplit(".", 1)[-1].lower() if "." in file_path else "ogg"
+            voice_file_url = upload_file(
+                file_bytes, "voices", voice_ext, f"audio/{voice_ext}"
+            )
+        except Exception as up_err:
+            logger.warning("음성 Storage 업로드 실패 (저장은 계속): %s", up_err)
+
         await _run_router_agent(
             content=transcribed,
             chat_id=chat_id,
@@ -572,6 +592,7 @@ async def _handle_voice(message: dict, chat_id: int | None) -> None:
                 "chat_id": chat_id,
                 "message_id": message.get("message_id"),
                 "type": "voice",
+                "file_url": voice_file_url,
             },
         )
 

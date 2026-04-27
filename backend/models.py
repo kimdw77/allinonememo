@@ -24,6 +24,7 @@ class NoteResponse(BaseModel):
     content_type: Optional[str] = None
     url: Optional[str] = None
     metadata: Optional[dict] = None
+    file_url: Optional[str] = None
     created_at: datetime
 
 

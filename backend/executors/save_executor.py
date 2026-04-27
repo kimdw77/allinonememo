@@ -40,6 +40,7 @@ class SaveExecutor:
                     "importance": memo_result.get("importance", "medium"),
                 },
                 trace_id=trace_id,
+                file_url=(inp.metadata or {}).get("file_url"),
             )
         except Exception as e:
             logger.error("save_memo 실패: %s", e)

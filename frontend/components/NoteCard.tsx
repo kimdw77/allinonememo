@@ -22,6 +22,7 @@ interface Note {
   category: string;
   content_type: string;
   url: string | null;
+  file_url?: string | null;
   created_at: string;
   related_links?: {
     articles?: RelatedLink[];
@@ -296,6 +297,30 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
               ))}
             </div>
           )}
+
+          {/* 원본 미디어 (사진 미리보기 / 음성 플레이어) */}
+          {note.file_url && (() => {
+            const ct = note.content_type ?? "";
+            const isImage = ["image", "newspaper", "article", "photo"].includes(ct);
+            const isVoice = ["voice", "audio"].includes(ct);
+            if (isImage) return (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={note.file_url!}
+                alt="원본 이미지"
+                className="w-full max-h-52 object-cover rounded-lg mb-3 border border-slate-100"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            );
+            if (isVoice) return (
+              <audio
+                controls
+                src={note.file_url!}
+                className="w-full mb-3 rounded-lg"
+              />
+            );
+            return null;
+          })()}
 
           {/* URL */}
           {note.url && (
