@@ -357,33 +357,45 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* 할일 대시보드 */}
+            {/* 할일 대시보드 — 클립보드 목록 */}
             <Link
               href="/tasks"
-              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0 text-base"
+              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0"
               title="할일 대시보드"
             >
-              ☑️
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              </svg>
             </Link>
 
-            {/* 파일 업로드 */}
+            {/* 파일 업로드 — 위 방향 화살표 */}
             <button
               onClick={() => setShowUpload(true)}
-              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0 text-base"
+              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300 transition-colors shadow-sm shrink-0"
               title="파일·이미지 업로드"
             >
-              📁
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+              </svg>
             </button>
 
-            {/* 내보내기 */}
+            {/* 내보내기 — 아래 방향 화살표 */}
             <div className="relative shrink-0">
               <button
                 onClick={() => setShowExportMenu((v) => !v)}
                 disabled={exporting}
-                className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-violet-500 hover:border-violet-300 transition-colors shadow-sm text-base disabled:opacity-50"
+                className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-violet-500 hover:border-violet-300 transition-colors shadow-sm disabled:opacity-50"
                 title="노트 내보내기"
               >
-                {exporting ? "⏳" : "📤"}
+                {exporting ? (
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                )}
               </button>
               {showExportMenu && (
                 <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-20 overflow-hidden w-40">
@@ -403,39 +415,51 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* 다중 선택 모드 토글 */}
+            {/* 다중 선택 — 4개 격자 (체크박스와 전혀 다른 모양) */}
             <button
               onClick={() => { setSelectMode((v) => !v); setSelectedIds(new Set()); }}
-              className={`p-2.5 rounded-xl border transition-colors shadow-sm shrink-0 text-base ${
+              className={`p-2.5 rounded-xl border transition-colors shadow-sm shrink-0 ${
                 selectMode
                   ? "border-indigo-400 bg-indigo-50 text-indigo-600"
                   : "border-slate-200 bg-white text-slate-500 hover:text-indigo-500 hover:border-indigo-300"
               }`}
               title={selectMode ? "선택 모드 종료" : "다중 선택"}
             >
-              ☑️
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+              </svg>
             </button>
 
-            {/* 일괄 재분류 */}
+            {/* 일괄 재분류 — 반짝이(AI) */}
             <button
               onClick={bulkReclassify}
               disabled={reclassifying}
-              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-emerald-500 hover:border-emerald-300 transition-colors shadow-sm shrink-0 text-base disabled:opacity-50"
-              title={reclassifyResult || "기타 카테고리 노트 일괄 재분류"}
+              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-emerald-500 hover:border-emerald-300 transition-colors shadow-sm shrink-0 disabled:opacity-50"
+              title={reclassifyResult || "AI 일괄 재분류"}
             >
-              {reclassifying ? "⏳" : "🔄"}
+              {reclassifying ? (
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                </svg>
+              )}
             </button>
 
-            {/* 중복 감지 */}
+            {/* 중복 감지 — 문서 두 장 */}
             <button
               onClick={findDuplicates}
-              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-amber-500 hover:border-amber-300 transition-colors shadow-sm shrink-0 text-base"
+              className="p-2.5 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-amber-500 hover:border-amber-300 transition-colors shadow-sm shrink-0"
               title="중복 노트 감지"
             >
-              🔁
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+              </svg>
             </button>
 
-            {/* 새로고침 */}
+            {/* 새로고침 — 회전 화살표 */}
             <button
               onClick={() => { offsetRef.current = 0; setNotes([]); setHasMore(true); loadNotes(true); }}
               disabled={loading}
