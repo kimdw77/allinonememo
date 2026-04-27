@@ -26,11 +26,9 @@ from utils.trace_id import set_trace_id
 
 logger = logging.getLogger(__name__)
 
-# 즉시 "준비 중" 응답을 반환하는 의도 (thoughts 기록 없음)
-_UNSUPPORTED_INTENTS = {"search", "question", "command"}
+# 즉시 "준비 중" 응답을 반환하는 의도
+_UNSUPPORTED_INTENTS = {"command"}
 _UNSUPPORTED_LABELS = {
-    "search": "검색",
-    "question": "질문 답변",
     "command": "명령 실행",
 }
 
@@ -64,7 +62,7 @@ class AgentPipeline:
             trace_id[:8], intent, confidence,
         )
 
-        # 미지원 의도 → thoughts 기록 없이 즉시 반환
+        # 미지원 의도 → 즉시 반환
         if intent in _UNSUPPORTED_INTENTS:
             label = _UNSUPPORTED_LABELS.get(intent, intent)
             return AgentOutput(
@@ -75,6 +73,30 @@ class AgentPipeline:
                     f"🚧 *{label}* 기능은 아직 지원 준비 중입니다.\n"
                     f"🔎 trace: {trace_id[:8]}"
                 ),
+            )
+
+        # ── 검색 의도 — 노트 검색 후 즉시 반환 ──────────────────────
+        if intent == "search":
+            from db.thoughts import update_thought_status
+            reply = _handle_search_intent(inp.content)
+            update_thought_status(thought_id, "processed")
+            return AgentOutput(
+                agent_name="pipeline",
+                success=True,
+                result={"intent": "search", "trace_id": trace_id},
+                reply_text=reply,
+            )
+
+        # ── 질문 의도 — RAG 기반 답변 후 즉시 반환 ─────────────────
+        if intent == "question":
+            from db.thoughts import update_thought_status
+            reply = _handle_question_intent(inp.content)
+            update_thought_status(thought_id, "processed")
+            return AgentOutput(
+                agent_name="pipeline",
+                success=True,
+                result={"intent": "question", "trace_id": trace_id},
+                reply_text=reply,
             )
 
         # ── ③ Memo 분석 ────────────────────────────────────────────
@@ -200,3 +222,73 @@ class AgentPipeline:
             },
             reply_text=reply,
         )
+
+
+def _handle_search_intent(query: str) -> str:
+    """노트 벡터 검색 → 텔레그램 응답 텍스트 반환."""
+    try:
+        results: list[dict] = []
+        try:
+            from services.embedder import embed_query
+            from db.notes import vector_search_notes
+            vector = embed_query(query)
+            results = vector_search_notes(vector, limit=5)
+        except Exception:
+            from db.notes import get_notes
+            results = get_notes(query=query, limit=5)
+
+        if not results:
+            return f"🔍 *{query[:30]}* 검색 결과가 없습니다."
+
+        lines = [f"🔍 *{query[:30]}* 검색 결과 ({len(results)}건)\n"]
+        for n in results:
+            summary = (n.get("summary") or n.get("raw_content") or "")[:70]
+            cat = n.get("category", "기타")
+            lines.append(f"• [{cat}] {summary}")
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error("search_intent 처리 실패: %s", e)
+        return "🔍 검색 중 오류가 발생했습니다."
+
+
+def _handle_question_intent(question: str) -> str:
+    """저장된 노트를 컨텍스트로 Claude에게 질문 → 텔레그램 응답 텍스트 반환."""
+    try:
+        context_notes: list[dict] = []
+        try:
+            from services.embedder import embed_query
+            from db.notes import vector_search_notes
+            vector = embed_query(question)
+            context_notes = vector_search_notes(vector, limit=5)
+        except Exception:
+            from db.notes import get_notes
+            context_notes = get_notes(query=question, limit=5)
+
+        if not context_notes:
+            return "🤔 관련 저장 내용이 없어 답변하기 어렵습니다."
+
+        context = "\n\n".join(
+            f"[{n.get('category', '기타')}] {n.get('summary', n.get('raw_content', ''))[:300]}"
+            for n in context_notes
+        )
+
+        import anthropic
+        from config import settings
+        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"다음 메모를 기반으로 질문에 간결하게 답하라. "
+                    f"메모에 없는 내용은 '저장된 정보에 없습니다'라고 답하라.\n\n"
+                    f"메모:\n{context}\n\n질문: {question}"
+                ),
+            }],
+        )
+        answer = resp.content[0].text if resp.content else "답변을 생성할 수 없습니다."
+        return f"🤔 *질문 답변*\n\n{answer}"
+    except Exception as e:
+        logger.error("question_intent 처리 실패: %s", e)
+        return "🤔 답변 생성 중 오류가 발생했습니다."

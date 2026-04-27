@@ -21,6 +21,10 @@ interface Note {
   content_type: string;
   url: string | null;
   created_at: string;
+  related_links?: {
+    articles?: Array<{ title: string; url: string; description?: string }>;
+    images?: string[];
+  };
 }
 
 interface DupNote { id: string; summary: string; category: string; created_at: string }

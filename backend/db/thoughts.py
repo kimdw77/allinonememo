@@ -66,6 +66,24 @@ def update_thought_status(
         return None
 
 
+def get_pending_confirm_thought() -> Optional[dict]:
+    """가장 최근 pending_user_confirm 상태의 thought 조회 (단일 사용자 시스템)."""
+    try:
+        db = get_db()
+        result = (
+            db.table("thoughts")
+            .select("*")
+            .eq("status", "pending_user_confirm")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+    except Exception as e:
+        logger.error("pending thought 조회 실패: %s", e)
+        return None
+
+
 def get_thought_by_trace(trace_id: str) -> Optional[dict]:
     """trace_id로 thought 조회 (최신 1건)."""
     try:

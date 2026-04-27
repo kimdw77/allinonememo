@@ -5,6 +5,13 @@
  */
 import { useState } from "react";
 
+interface RelatedLink {
+  title: string;
+  url: string;
+  description?: string;
+  published_date?: string;
+}
+
 interface Note {
   id: string;
   source: string;
@@ -16,6 +23,11 @@ interface Note {
   content_type: string;
   url: string | null;
   created_at: string;
+  related_links?: {
+    articles?: RelatedLink[];
+    images?: string[];
+    search_query?: string;
+  };
 }
 
 interface NoteCardProps {
@@ -309,6 +321,41 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
                   #{kw}
                 </span>
               ))}
+            </div>
+          )}
+
+          {/* 관련 기사 (신문 OCR) */}
+          {note.related_links?.articles && note.related_links.articles.length > 0 && (
+            <div className="mb-2 border border-sky-100 rounded-lg p-2.5 bg-sky-50">
+              <p className="text-[11px] font-semibold text-sky-600 mb-1.5">📰 관련 기사</p>
+              <div className="space-y-1">
+                {note.related_links.articles.slice(0, 3).map((article, i) => (
+                  <a
+                    key={i}
+                    href={article.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-start gap-1 text-xs text-sky-700 hover:text-sky-900 hover:underline"
+                  >
+                    <span className="shrink-0 mt-0.5 text-sky-400">•</span>
+                    <span className="line-clamp-1">{article.title}</span>
+                  </a>
+                ))}
+              </div>
+              {note.related_links.images && note.related_links.images.length > 0 && (
+                <div className="flex gap-1.5 mt-2 overflow-x-auto">
+                  {note.related_links.images.slice(0, 3).map((img, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={i}
+                      src={img}
+                      alt=""
+                      className="h-14 w-20 object-cover rounded shrink-0 border border-sky-100"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </>

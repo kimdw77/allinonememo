@@ -60,6 +60,14 @@ async def telegram_webhook(request: Request) -> Response:
         # 잘못된 JSON도 200 반환
         return Response(status_code=200)
 
+    # 인라인 버튼 응답 처리 (✅ 저장 / ❌ 취소)
+    callback_query = body.get("callback_query")
+    if callback_query:
+        sender_id = str(callback_query.get("from", {}).get("id", ""))
+        if _is_allowed_user(sender_id):
+            await _handle_callback_query(callback_query)
+        return Response(status_code=200)
+
     message = body.get("message") or body.get("edited_message")
     if not message:
         return Response(status_code=200)
@@ -171,6 +179,39 @@ async def _send_telegram(chat_id: int | None, text: str) -> None:
         logger.error("텔레그램 메시지 전송 실패: %s", e)
 
 
+async def _send_telegram_with_keyboard(
+    chat_id: int | None,
+    text: str,
+    inline_keyboard: list[list[dict]],
+) -> None:
+    """인라인 버튼이 포함된 텔레그램 메시지 전송."""
+    if not chat_id or not settings.TELEGRAM_BOT_TOKEN:
+        return
+    try:
+        url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/sendMessage"
+        async with httpx.AsyncClient(timeout=10) as client:
+            await client.post(url, json={
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": "Markdown",
+                "reply_markup": {"inline_keyboard": inline_keyboard},
+            })
+    except Exception as e:
+        logger.error("텔레그램 인라인 버튼 메시지 전송 실패: %s", e)
+
+
+async def _answer_callback_query(callback_query_id: str, text: str = "") -> None:
+    """Telegram callback_query 수신 확인 응답 (필수, 미응답 시 로딩 표시 지속)."""
+    if not settings.TELEGRAM_BOT_TOKEN:
+        return
+    try:
+        url = f"https://api.telegram.org/bot{settings.TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
+        async with httpx.AsyncClient(timeout=5) as client:
+            await client.post(url, json={"callback_query_id": callback_query_id, "text": text})
+    except Exception as e:
+        logger.error("callback_query 응답 실패: %s", e)
+
+
 async def _handle_command(text: str, chat_id: int | None) -> None:
     """
     텔레그램 봇 명령어 처리.
@@ -261,6 +302,33 @@ async def _handle_command(text: str, chat_id: int | None) -> None:
                     chat_id,
                     f"📅 캘린더에 등록했습니다!\n*{schedule['title']}*\n{schedule['start'][:16].replace('T', ' ')}\n[캘린더에서 보기]({event_url})",
                 )
+                # 30분 전 알림 스케줄링
+                try:
+                    from datetime import datetime, timedelta, timezone
+                    from services.scheduler_instance import get_scheduler
+                    event_start = datetime.fromisoformat(schedule["start"])
+                    if event_start.tzinfo is None:
+                        event_start = event_start.replace(tzinfo=timezone(timedelta(hours=9)))
+                    reminder_time = event_start - timedelta(minutes=30)
+                    if reminder_time > datetime.now(reminder_time.tzinfo):
+                        sched = get_scheduler()
+                        if sched:
+                            import asyncio
+                            title = schedule["title"]
+                            start_str = schedule["start"][:16].replace("T", " ")
+                            sched.add_job(
+                                lambda: asyncio.run(_send_telegram(
+                                    chat_id,
+                                    f"⏰ 30분 후 일정!\n*{title}*\n{start_str}",
+                                )),
+                                "date",
+                                run_date=reminder_time,
+                                id=f"cal_reminder_{event_url[-10:]}",
+                                replace_existing=True,
+                            )
+                            logger.info("캘린더 알림 예약: %s (30분 전)", reminder_time)
+                except Exception as reminder_err:
+                    logger.warning("알림 스케줄링 실패 (무시): %s", reminder_err)
             else:
                 await _send_telegram(chat_id, "❌ 캘린더 등록 실패 (GOOGLE 환경변수 확인 필요)")
         except Exception as e:
@@ -302,6 +370,37 @@ async def _handle_command(text: str, chat_id: int | None) -> None:
             chat_id=chat_id, metadata={"chat_id": chat_id},
         ))
         await _send_telegram(chat_id, out.reply_text or "❌ 보고서 생성 실패")
+
+    elif cmd in ("/yes", "/yes@myvaultbot"):
+        from db.thoughts import get_pending_confirm_thought, update_thought_status
+        from services.classifier import classify_content
+        from db.notes import insert_note
+        thought = get_pending_confirm_thought()
+        if not thought:
+            await _send_telegram(chat_id, "⚠️ 확인 대기 중인 메모가 없습니다.")
+            return
+        result = classify_content(thought["raw_input"])
+        insert_note(
+            source="telegram",
+            raw_content=thought["raw_input"],
+            summary=result.get("summary", ""),
+            highlights=result.get("highlights", []),
+            keywords=result.get("keywords", []),
+            category=result.get("category", "기타"),
+            content_type=result.get("content_type", "other"),
+            metadata={"confirmed_by": "user"},
+        )
+        update_thought_status(thought["id"], "processed")
+        await _send_telegram(chat_id, "✅ 저장 완료!")
+
+    elif cmd in ("/no", "/no@myvaultbot"):
+        from db.thoughts import get_pending_confirm_thought, update_thought_status
+        thought = get_pending_confirm_thought()
+        if not thought:
+            await _send_telegram(chat_id, "⚠️ 확인 대기 중인 메모가 없습니다.")
+            return
+        update_thought_status(thought["id"], "rejected")
+        await _send_telegram(chat_id, "❌ 저장을 취소했습니다.")
 
     elif cmd in ("/help", "/help@myvaultbot", "/start"):
         help_text = (
@@ -481,13 +580,54 @@ async def _handle_voice(message: dict, chat_id: int | None) -> None:
         await _send_telegram(chat_id, "❌ 음성 처리 중 오류가 발생했습니다.")
 
 
+async def _handle_callback_query(callback_query: dict) -> None:
+    """인라인 버튼 클릭 처리 (✅ 저장 / ❌ 취소)."""
+    query_id = callback_query.get("id", "")
+    data = callback_query.get("data", "")
+    chat_id = callback_query.get("message", {}).get("chat", {}).get("id")
+
+    from db.thoughts import get_pending_confirm_thought, update_thought_status
+
+    if data == "confirm_yes":
+        await _answer_callback_query(query_id, "저장합니다!")
+        thought = get_pending_confirm_thought()
+        if not thought:
+            await _send_telegram(chat_id, "⚠️ 확인 대기 중인 메모가 없습니다.")
+            return
+        from services.classifier import classify_content
+        from db.notes import insert_note
+        result = classify_content(thought["raw_input"])
+        insert_note(
+            source="telegram",
+            raw_content=thought["raw_input"],
+            summary=result.get("summary", ""),
+            highlights=result.get("highlights", []),
+            keywords=result.get("keywords", []),
+            category=result.get("category", "기타"),
+            content_type=result.get("content_type", "other"),
+            metadata={"confirmed_by": "user"},
+        )
+        update_thought_status(thought["id"], "processed")
+        await _send_telegram(chat_id, "✅ 저장 완료!")
+
+    elif data == "confirm_no":
+        await _answer_callback_query(query_id, "취소합니다.")
+        thought = get_pending_confirm_thought()
+        if thought:
+            update_thought_status(thought["id"], "rejected")
+        await _send_telegram(chat_id, "❌ 저장을 취소했습니다.")
+
+    else:
+        await _answer_callback_query(query_id)
+
+
 async def _run_router_agent(
     content: str,
     chat_id: int | None,
     metadata: dict | None = None,
     source: str = "telegram",
 ) -> None:
-    """AgentPipeline 실행 후 결과 텔레그램 전송"""
+    """AgentPipeline 실행 후 결과 텔레그램 전송. ask_user이면 인라인 버튼 포함."""
     from agents.pipeline import AgentPipeline
     from agents.base import AgentInput
     from utils.trace_id import new_trace_id
@@ -502,4 +642,15 @@ async def _run_router_agent(
         ),
         trace_id=trace_id,
     )
-    await _send_telegram(chat_id, out.reply_text or "✅ 처리 완료")
+
+    if out.result.get("final_action") == "ask_user":
+        await _send_telegram_with_keyboard(
+            chat_id,
+            out.reply_text or "⚠️ 확인이 필요합니다. 저장하시겠습니까?",
+            [[
+                {"text": "✅ 저장", "callback_data": "confirm_yes"},
+                {"text": "❌ 취소", "callback_data": "confirm_no"},
+            ]],
+        )
+    else:
+        await _send_telegram(chat_id, out.reply_text or "✅ 처리 완료")

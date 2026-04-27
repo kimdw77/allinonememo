@@ -80,6 +80,8 @@ def start_scheduler() -> None:
         "cron", day_of_week="mon", hour=9, minute=0, id="weekly_report",
     )
     scheduler.start()
+    from services.scheduler_instance import set_scheduler
+    set_scheduler(scheduler)
     logger.info("스케줄러 시작 (RSS 30분, 일일 요약 08:00, Drive 백업 일요일 02:00, 주간 보고서 월요일 09:00)")
 
 
