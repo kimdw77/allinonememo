@@ -5,6 +5,7 @@ routers/webhook.py — 카카오·텔레그램 메시지 수신 처리
 import hashlib
 import hmac
 import logging
+from collections import OrderedDict
 from typing import Any
 
 from fastapi import APIRouter, Request, Response, HTTPException
@@ -16,6 +17,20 @@ from db.notes import get_notes, get_stats
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# 중복 webhook 방지: 최근 2000개 update_id 캐시 (FIFO)
+_processed_updates: OrderedDict[int, bool] = OrderedDict()
+_MAX_UPDATE_CACHE = 2000
+
+
+def _seen_update_id(update_id: int) -> bool:
+    """이미 처리한 update_id면 True. 새 ID면 등록 후 False."""
+    if update_id in _processed_updates:
+        return True
+    _processed_updates[update_id] = True
+    if len(_processed_updates) > _MAX_UPDATE_CACHE:
+        _processed_updates.popitem(last=False)
+    return False
 
 
 def _verify_telegram_signature(secret: str, body_bytes: bytes, signature_header: str | None) -> bool:
@@ -60,6 +75,12 @@ async def telegram_webhook(request: Request) -> Response:
         # 잘못된 JSON도 200 반환
         return Response(status_code=200)
 
+    # update_id 중복 체크 — Telegram 재시도에 의한 다중 처리 방지
+    update_id: int | None = body.get("update_id")
+    if update_id and _seen_update_id(update_id):
+        logger.warning("중복 update_id 무시: %d", update_id)
+        return Response(status_code=200)
+
     # 인라인 버튼 응답 처리 (✅ 저장 / ❌ 취소)
     callback_query = body.get("callback_query")
     if callback_query:
@@ -68,7 +89,21 @@ async def telegram_webhook(request: Request) -> Response:
             await _handle_callback_query(callback_query)
         return Response(status_code=200)
 
-    message = body.get("message") or body.get("edited_message")
+    # edited_message는 미디어(사진·음성) 재처리 방지 — 텍스트 편집만 허용
+    if "edited_message" in body and "message" not in body:
+        edited = body["edited_message"]
+        has_media = (
+            edited.get("photo")
+            or edited.get("voice")
+            or edited.get("audio")
+            or edited.get("document", {}).get("mime_type", "").startswith("image/")
+        )
+        if has_media:
+            return Response(status_code=200)
+        message: dict = edited
+    else:
+        message = body.get("message")
+
     if not message:
         return Response(status_code=200)
 
@@ -477,6 +512,11 @@ async def _handle_photo(message: dict, chat_id: int | None) -> None:
         from services.classifier import analyze_image
         result = analyze_image(file_bytes, media_type)
 
+        # 분석 완전 실패: summary·keywords 모두 비어있으면 사용자에게 경고
+        analysis_failed = not result.get("summary") and not result.get("keywords")
+        if analysis_failed:
+            logger.warning("이미지 분석 결과 비어있음 (fallback). file_id=%s, media_type=%s", file_id, media_type)
+
         # raw_content: 캡션 → OCR 텍스트 → 요약 순 우선
         raw_content = caption or result.get("ocr_text") or result.get("summary") or "[이미지]"
 
@@ -528,7 +568,16 @@ async def _handle_photo(message: dict, chat_id: int | None) -> None:
             },
         )
 
-        # 텔레그램 응답: 신문이면 요약 3줄 + 관련 링크, 일반 이미지면 간단 확인
+        # 텔레그램 응답: 분석 실패 시 경고, 신문이면 요약 + 관련 링크, 일반이면 간단 확인
+        if analysis_failed:
+            await _send_telegram(
+                chat_id,
+                "⚠️ 이미지는 저장했지만 AI 해석에 실패했습니다. "
+                f"(포맷: {media_type}, 크기: {len(file_bytes)//1024}KB)\n"
+                "잠시 후 다시 보내거나, 다른 포맷(JPG·PNG)으로 시도해보세요.",
+            )
+            return
+
         if is_news:
             import html as html_lib
             lines: list[str] = ["📰 <b>신문 기사 저장 완료!</b>\n"]

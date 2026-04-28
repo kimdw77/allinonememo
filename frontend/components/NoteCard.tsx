@@ -66,7 +66,7 @@ const SOURCE_LABEL: Record<string, string> = {
   telegram: "텔레그램", kakao: "카카오", youtube: "유튜브", rss: "RSS", manual: "직접입력",
 };
 
-const CATEGORIES = ["비즈니스", "기술", "무역/수출", "건강", "교육", "뉴스", "개인메모", "기타"];
+const FALLBACK_CATEGORIES = ["비즈니스", "기술", "무역/수출", "건강", "교육", "뉴스", "개인메모", "기타"];
 
 interface RelatedNote {
   id: string;
@@ -85,6 +85,7 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
   const [editSummary, setEditSummary] = useState(note.summary || "");
   const [editKeywords, setEditKeywords] = useState((note.keywords || []).join(", "));
   const [editCategory, setEditCategory] = useState(note.category || "기타");
+  const [categories, setCategories] = useState<string[]>(FALLBACK_CATEGORIES);
 
   // 연관 노트
   const [related, setRelated] = useState<RelatedNote[]>([]);
@@ -108,11 +109,21 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
     }
   };
 
-  const handleEditOpen = () => {
+  const handleEditOpen = async () => {
     setEditSummary(note.summary || "");
     setEditKeywords((note.keywords || []).join(", "));
     setEditCategory(note.category || "기타");
     setEditing(true);
+    // 편집 시 최신 카테고리 목록을 서버에서 로드
+    try {
+      const res = await fetch("/api/categories");
+      if (res.ok) {
+        const data: Array<{ name: string }> = await res.json();
+        const names = data.map((d) => d.name);
+        if (!names.includes("기타")) names.push("기타");
+        setCategories(names);
+      }
+    } catch { /* 실패 시 fallback 목록 유지 */ }
   };
 
   const handleSave = async () => {
@@ -249,7 +260,7 @@ export default function NoteCard({ note, onDelete, onUpdate }: NoteCardProps) {
               onChange={(e) => setEditCategory(e.target.value)}
               className="w-full text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
             >
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
           <div className="flex gap-2 justify-end pt-1">

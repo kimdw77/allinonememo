@@ -54,6 +54,11 @@ export default function Sidebar({ selected, onSelect, noteCount, isOpen, onClose
   const [editIcon, setEditIcon] = useState("");
   const editInputRef = useRef<HTMLInputElement>(null);
 
+  // 카테고리 통합 모달
+  const [mergeSource, setMergeSource] = useState<string | null>(null);
+  const [mergeTarget, setMergeTarget] = useState("");
+  const [merging, setMerging] = useState(false);
+
   // 드래그앤드롭
   const dragOver = useRef<string | null>(null);
   const [dragTarget, setDragTarget] = useState<string | null>(null);
@@ -108,12 +113,30 @@ export default function Sidebar({ selected, onSelect, noteCount, isOpen, onClose
     setAdding(false);
   };
 
-  const handleDelete = async (name: string) => {
-    const res = await fetch(`/api/categories/${encodeURIComponent(name)}`, { method: "DELETE" });
+  // 삭제 → 통합 모달 열기 ('/'가 포함된 이름도 body로 처리)
+  const handleDelete = (name: string) => {
+    const others = categories.filter((c) => c.name !== name);
+    setMergeSource(name);
+    setMergeTarget(others[0]?.name ?? "기타");
+  };
+
+  // 통합 실행: source 노트를 target으로 이동 후 source 삭제
+  const handleMerge = async () => {
+    if (!mergeSource) return;
+    setMerging(true);
+    const res = await fetch("/api/categories?action=merge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: mergeSource, target: mergeTarget }),
+    });
     if (res.ok) {
-      if (selected === name) onSelect("");
+      if (selected === mergeSource) onSelect(mergeTarget);
+      const order = JSON.parse(localStorage.getItem(ORDER_KEY) ?? "[]") as string[];
+      localStorage.setItem(ORDER_KEY, JSON.stringify(order.filter((n) => n !== mergeSource)));
       await fetchCategories();
     }
+    setMergeSource(null);
+    setMerging(false);
   };
 
   // ─── 이름 변경 ─────────────────────────────────
@@ -132,14 +155,14 @@ export default function Sidebar({ selected, onSelect, noteCount, isOpen, onClose
     if (trimmed === editingName && editIcon === categories.find(c => c.name === editingName)?.icon) {
       cancelEdit(); return;
     }
-    const res = await fetch(`/api/categories/${encodeURIComponent(editingName)}`, {
-      method: "PATCH",
+    // body 기반 POST — '/'가 포함된 이름도 안전하게 처리
+    const res = await fetch("/api/categories?action=update", {
+      method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ new_name: trimmed, icon: editIcon }),
+      body: JSON.stringify({ name: editingName, new_name: trimmed, icon: editIcon }),
     });
     if (res.ok) {
       if (selected === editingName) onSelect(trimmed);
-      // localStorage 순서도 이름 갱신
       const order = JSON.parse(localStorage.getItem(ORDER_KEY) ?? "[]") as string[];
       const newOrder = order.map((n) => (n === editingName ? trimmed : n));
       localStorage.setItem(ORDER_KEY, JSON.stringify(newOrder));
@@ -301,11 +324,11 @@ export default function Sidebar({ selected, onSelect, noteCount, isOpen, onClose
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6.586-6.586a2 2 0 112.828 2.828L11.828 15.828a2 2 0 01-1.414.586H9v-2a2 2 0 01.586-1.414z" />
                           </svg>
                         </button>
-                        {/* 삭제 ('기타' 제외) */}
+                        {/* 통합 및 삭제 ('기타' 제외) */}
                         {cat.name !== "기타" && (
                           <button onClick={() => handleDelete(cat.name)}
                             className="text-slate-600 hover:text-red-400 transition-colors p-1 rounded"
-                            title="삭제">
+                            title="통합 및 삭제">
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
@@ -347,6 +370,45 @@ export default function Sidebar({ selected, onSelect, noteCount, isOpen, onClose
           </button>
         </div>
       </aside>
+
+      {/* 카테고리 통합 모달 */}
+      {mergeSource && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="bg-slate-800 rounded-2xl shadow-2xl w-full max-w-xs p-5 border border-slate-700">
+            <h3 className="text-white font-semibold text-sm mb-1">카테고리 통합</h3>
+            <p className="text-slate-400 text-xs mb-4">
+              <span className="text-indigo-400 font-medium">{mergeSource}</span>의 모든 노트를 아래 카테고리로 이동하고 삭제합니다.
+            </p>
+            <label className="text-xs text-slate-500 mb-1 block">이동할 카테고리</label>
+            <select
+              value={mergeTarget}
+              onChange={(e) => setMergeTarget(e.target.value)}
+              className="w-full bg-slate-700 text-white text-sm rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 mb-4"
+            >
+              {categories
+                .filter((c) => c.name !== mergeSource)
+                .map((c) => (
+                  <option key={c.name} value={c.name}>{c.icon} {c.name}</option>
+                ))}
+            </select>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setMergeSource(null)}
+                className="text-xs px-3 py-1.5 rounded-lg border border-slate-600 text-slate-400 hover:text-slate-200 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleMerge}
+                disabled={merging}
+                className="text-xs px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white transition-colors"
+              >
+                {merging ? "통합 중…" : "통합 및 삭제"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

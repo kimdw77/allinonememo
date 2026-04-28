@@ -48,6 +48,27 @@ def _get_categories_str() -> str:
     return "비즈니스|기술|AI|무역/수출|건강|교육|뉴스|개인메모|기타"
 
 
+def _extract_first_json(text: str) -> dict | None:
+    """응답에서 첫 번째 완전한 JSON 객체를 괄호 카운팅으로 추출. greedy regex 오파싱 방지."""
+    import re
+    cleaned = re.sub(r"```(?:json)?\s*|\s*```", "", text).strip()
+    start = cleaned.find("{")
+    if start == -1:
+        return None
+    depth = 0
+    for i, ch in enumerate(cleaned[start:], start):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                try:
+                    return json.loads(cleaned[start : i + 1])
+                except json.JSONDecodeError:
+                    return None
+    return None
+
+
 def classify_content(content: str) -> dict:
     """
     텍스트 내용을 요약·분류·키워드 추출 (단일 API 호출)
@@ -71,15 +92,11 @@ def classify_content(content: str) -> dict:
         raw = response.content[0].text if response.content else ""
         logger.info("Claude 원본 응답: %s", raw[:200])
 
-        # 코드블록 제거 후 JSON 추출
-        import re
-        cleaned = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
-        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-        if not match:
-            logger.error("Claude 응답에서 JSON 추출 실패. 원본: %s", raw[:200])
+        result = _extract_first_json(raw)
+        if result is None:
+            logger.error("Claude 응답에서 JSON 추출 실패. 원본(%d자): %s", len(raw), raw[:300])
             return _FALLBACK.copy()
 
-        result = json.loads(match.group())
         return {
             "summary": result.get("summary", ""),
             "highlights": result.get("highlights", []),
@@ -122,7 +139,12 @@ def analyze_image(image_bytes: bytes, media_type: str) -> dict:
     문서·잡지·책 촬영 이미지도 텍스트 추출 가능.
     """
     import base64
-    import re
+
+    # Claude Vision이 지원하지 않는 포맷은 jpeg로 폴백
+    _ALLOWED_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+    if media_type not in _ALLOWED_TYPES:
+        logger.warning("지원되지 않는 미디어 타입 '%s' → image/jpeg로 폴백", media_type)
+        media_type = "image/jpeg"
 
     categories_str = _get_categories_str()
     b64 = base64.standard_b64encode(image_bytes).decode("utf-8")
@@ -130,7 +152,7 @@ def analyze_image(image_bytes: bytes, media_type: str) -> dict:
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=4000,  # OCR 전문 + 신문 분류 필드 포함하여 확대
+            max_tokens=4000,
             messages=[{
                 "role": "user",
                 "content": [
@@ -144,14 +166,13 @@ def analyze_image(image_bytes: bytes, media_type: str) -> dict:
         )
 
         raw = response.content[0].text if response.content else ""
-        logger.info("이미지 분석 Claude 응답 (앞200자): %s", raw[:200])
-        cleaned = re.sub(r"```(?:json)?\s*|\s*```", "", raw).strip()
-        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
-        if not match:
-            logger.error("이미지 분석 응답에서 JSON 추출 실패. 응답 길이=%d, 내용: %s", len(raw), raw[:300])
+        logger.info("이미지 분석 Claude 응답 (앞300자): %s", raw[:300])
+
+        result = _extract_first_json(raw)
+        if result is None:
+            logger.error("이미지 분석 JSON 추출 실패. 응답 전체(%d자): %s", len(raw), raw[:500])
             return _FALLBACK.copy()
 
-        result = json.loads(match.group())
         return {
             "summary": result.get("summary", ""),
             "highlights": result.get("highlights", []),
@@ -164,6 +185,9 @@ def analyze_image(image_bytes: bytes, media_type: str) -> dict:
             "search_query": result.get("search_query", ""),
         }
 
+    except anthropic.APIError as e:
+        logger.error("이미지 분석 Claude API 오류: %s", e)
+        return _FALLBACK.copy()
     except Exception as e:
         logger.error("이미지 분석 실패: %s", e)
         return _FALLBACK.copy()

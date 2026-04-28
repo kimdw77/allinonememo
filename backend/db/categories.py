@@ -53,6 +53,23 @@ def delete_category(name: str) -> bool:
         return False
 
 
+def merge_category(source_name: str, target_name: str) -> bool:
+    """
+    source 카테고리의 모든 노트를 target으로 이동 후 source 카테고리 삭제.
+    '기타' → 다른 곳으로 이동도 가능. source == target이면 False.
+    """
+    if source_name == target_name:
+        return False
+    try:
+        db = get_db()
+        db.table("notes").update({"category": target_name}).eq("category", source_name).execute()
+        db.table("categories").delete().eq("name", source_name).execute()
+        return True
+    except Exception as e:
+        logger.error("카테고리 통합 실패 (%s → %s): %s", source_name, target_name, e)
+        return False
+
+
 def rename_category(old_name: str, new_name: str, new_icon: Optional[str] = None) -> Optional[dict]:
     """
     카테고리 이름·아이콘 변경.

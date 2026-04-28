@@ -309,19 +309,58 @@ async def edit_note(note_id: str, body: NoteUpdate):
 
 @router.post("/{note_id}/reclassify", response_model=NoteResponse)
 async def reclassify_note(note_id: str):
-    """기존 노트를 Claude로 재분류 (요약·키워드·카테고리 갱신)"""
+    """기존 노트를 Claude로 재분류. 이미지 노트는 file_url에서 다시 Vision 분석."""
     note = get_note_by_id(note_id)
     if not note:
         raise HTTPException(status_code=404, detail="노트를 찾을 수 없습니다")
 
-    result = classify_content(note["raw_content"])
-    updated = update_note(note_id, {
-        "summary": result.get("summary", ""),
-        "highlights": result.get("highlights", []),
-        "keywords": result.get("keywords", []),
-        "category": result.get("category", "기타"),
-        "content_type": result.get("content_type", "other"),
-    })
+    IMAGE_CONTENT_TYPES = {"image", "newspaper", "article", "photo", "other"}
+    file_url: str | None = note.get("file_url")
+    is_image_note = (
+        file_url
+        and note.get("content_type") in IMAGE_CONTENT_TYPES
+        and (not note.get("summary") or note.get("raw_content") in ("[이미지]", "", None))
+    )
+
+    if is_image_note:
+        # file_url에서 이미지를 다운로드하여 Vision 재분석
+        import httpx, re
+        from services.classifier import analyze_image
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                r = await client.get(file_url)
+                r.raise_for_status()
+                image_bytes = r.content
+            # Content-Type 또는 URL 확장자로 미디어 타입 추정
+            ct_header = r.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+            ext = re.search(r"\.(jpe?g|png|gif|webp)$", file_url, re.I)
+            mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "gif": "image/gif", "webp": "image/webp"}
+            media_type = ct_header if ct_header.startswith("image/") else mime_map.get((ext.group(1).lower() if ext else ""), "image/jpeg")
+            result = analyze_image(image_bytes, media_type)
+        except Exception as e:
+            logger.error("이미지 재분류 다운로드 실패 (file_url=%s): %s", file_url, e)
+            raise HTTPException(status_code=502, detail="이미지 다운로드 실패")
+
+        raw_content = result.get("ocr_text") or result.get("summary") or note.get("raw_content") or "[이미지]"
+        content_type = "newspaper" if result.get("is_newspaper") else result.get("content_type", "image")
+        updated = update_note(note_id, {
+            "raw_content": raw_content,
+            "summary": result.get("summary", ""),
+            "highlights": result.get("highlights", []),
+            "keywords": result.get("keywords", []),
+            "category": result.get("category", "기타"),
+            "content_type": content_type,
+        })
+    else:
+        result = classify_content(note["raw_content"])
+        updated = update_note(note_id, {
+            "summary": result.get("summary", ""),
+            "highlights": result.get("highlights", []),
+            "keywords": result.get("keywords", []),
+            "category": result.get("category", "기타"),
+            "content_type": result.get("content_type", "other"),
+        })
+
     if not updated:
         raise HTTPException(status_code=500, detail="재분류 저장 실패")
     return updated

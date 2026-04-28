@@ -17,12 +17,22 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const action = searchParams.get("action");
   const body = await request.text();
-  const res = await fetch(`${BACKEND}/api/categories`, {
+
+  // action=merge → /api/categories/merge
+  // action=delete → /api/categories/delete
+  // action=update → /api/categories/update
+  // (기본) → /api/categories (카테고리 생성)
+  const endpoint = action ? `/api/categories/${action}` : "/api/categories";
+  const res = await fetch(`${BACKEND}${endpoint}`, {
     method: "POST",
     headers: backendHeaders(),
     body,
   });
+
+  if (res.status === 204) return new NextResponse(null, { status: 204 });
   const data = await res.json();
   return NextResponse.json(data, { status: res.status });
 }
