@@ -65,16 +65,21 @@ def insert_note(
 def get_notes(
     query: Optional[str] = None,
     category: Optional[str] = None,
+    keyword: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
 ) -> list[dict]:
-    """노트 목록 조회 (키워드 검색·카테고리 필터 지원)"""
+    """노트 목록 조회 (키워드 검색·카테고리·태그 필터 지원)"""
     try:
         db = get_db()
         q = db.table("notes").select("*").order("created_at", desc=True)
 
         if category:
             q = q.eq("category", category)
+
+        # 정확한 태그 필터 (keywords 배열 contains)
+        if keyword:
+            q = q.contains("keywords", [keyword])
 
         if query:
             # 특수문자 이스케이프 후 검색 (PostgREST or_ 인젝션 방지)
@@ -187,6 +192,74 @@ def get_top_keywords(limit: int = 50) -> list[str]:
     except Exception as e:
         logger.error("키워드 목록 조회 실패: %s", e)
         return []
+
+
+def get_keyword_stats(limit: int = 100) -> list[dict]:
+    """키워드별 빈도수 + 주요 카테고리 반환 (워드클라우드용)"""
+    try:
+        db = get_db()
+        result = db.table("notes").select("keywords,category").execute()
+        freq: dict[str, dict] = {}
+        for row in (result.data or []):
+            cat = row.get("category", "기타")
+            for kw in (row.get("keywords") or []):
+                if not kw:
+                    continue
+                if kw not in freq:
+                    freq[kw] = {"count": 0, "cats": {}}
+                freq[kw]["count"] += 1
+                freq[kw]["cats"][cat] = freq[kw]["cats"].get(cat, 0) + 1
+
+        stats = []
+        for kw, data in freq.items():
+            top_cat = max(data["cats"], key=lambda k: data["cats"][k])
+            stats.append({"keyword": kw, "count": data["count"], "top_category": top_cat})
+
+        stats.sort(key=lambda x: -x["count"])
+        return stats[:limit]
+    except Exception as e:
+        logger.error("키워드 통계 조회 실패: %s", e)
+        return []
+
+
+def get_calendar_notes(year: int, month: int) -> dict:
+    """특정 월의 날짜(KST)별 노트 목록 반환"""
+    from datetime import datetime, timedelta, timezone
+    KST = timezone(timedelta(hours=9))
+
+    try:
+        db = get_db()
+        # UTC 기준으로 넉넉하게 조회 후 KST 변환
+        if month == 12:
+            next_y, next_m = year + 1, 1
+        else:
+            next_y, next_m = year, month + 1
+
+        start_utc = f"{year}-{month:02d}-01T00:00:00+09:00"
+        end_utc = f"{next_y}-{next_m:02d}-01T00:00:00+09:00"
+
+        result = db.table("notes").select(
+            "id,summary,category,content_type,created_at"
+        ).gte("created_at", start_utc).lt("created_at", end_utc).order("created_at").execute()
+
+        grouped: dict[str, list] = {}
+        for note in (result.data or []):
+            raw_dt = note.get("created_at", "")
+            try:
+                dt = datetime.fromisoformat(raw_dt.replace("Z", "+00:00"))
+                date_str = dt.astimezone(KST).strftime("%Y-%m-%d")
+            except Exception:
+                continue
+            grouped.setdefault(date_str, []).append({
+                "id": note["id"],
+                "summary": (note.get("summary") or "")[:100],
+                "category": note.get("category", "기타"),
+                "content_type": note.get("content_type", "other"),
+            })
+        return grouped
+    except Exception as e:
+        logger.error("캘린더 노트 조회 실패: %s", e)
+        return {}
 
 
 def bulk_delete_notes(note_ids: list[str]) -> int:

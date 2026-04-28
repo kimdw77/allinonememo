@@ -13,6 +13,7 @@ from db.notes import (
     insert_note, update_note, get_notes, get_note_by_id, delete_note,
     vector_search_notes, get_related_notes, get_graph_data,
     get_duplicates, merge_notes, get_top_keywords, bulk_delete_notes, export_notes,
+    get_keyword_stats, get_calendar_notes,
 )
 
 logger = logging.getLogger(__name__)
@@ -23,11 +24,12 @@ router = APIRouter(dependencies=[Depends(require_api_key)])
 async def list_notes(
     q: Optional[str] = Query(None, description="키워드 검색", max_length=200),
     category: Optional[str] = Query(None, description="카테고리 필터", max_length=50),
+    keyword: Optional[str] = Query(None, description="정확한 태그 필터", max_length=100),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ):
-    """노트 목록 조회 (키워드 검색·카테고리 필터 지원)"""
-    return get_notes(query=q, category=category, limit=limit, offset=offset)
+    """노트 목록 조회 (키워드 검색·카테고리·태그 필터 지원)"""
+    return get_notes(query=q, category=category, keyword=keyword, limit=limit, offset=offset)
 
 
 @router.post("", response_model=NoteResponse, status_code=201)
@@ -186,13 +188,32 @@ async def merge_two_notes(keep_id: str, remove_id: str):
 
 
 # ─────────────────────────────────────────
-# 키워드 자동완성
+# 키워드 자동완성 + 통계
 # ─────────────────────────────────────────
+
+@router.get("/keywords/stats")
+async def keyword_stats(limit: int = Query(100, ge=1, le=300)):
+    """키워드별 빈도수·주요 카테고리 반환 (워드클라우드용)"""
+    return get_keyword_stats(limit=limit)
+
 
 @router.get("/keywords")
 async def keywords_autocomplete(limit: int = Query(50, ge=1, le=200)):
     """전체 노트 키워드 빈도 순 목록 (검색 자동완성용)"""
     return get_top_keywords(limit=limit)
+
+
+# ─────────────────────────────────────────
+# 캘린더
+# ─────────────────────────────────────────
+
+@router.get("/calendar")
+async def calendar(
+    year: int = Query(..., ge=2020, le=2035),
+    month: int = Query(..., ge=1, le=12),
+):
+    """특정 월의 날짜별 노트 목록 반환 (KST 기준)"""
+    return get_calendar_notes(year=year, month=month)
 
 
 # ─────────────────────────────────────────

@@ -349,8 +349,15 @@ export default function Sidebar({ selected, onSelect, noteCount, isOpen, onClose
             className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
               pathname === "/graph" ? "bg-indigo-500/20 text-indigo-400 font-medium" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
             }`}>
-            <span className="text-base w-5 text-center">🕸️</span>
-            <span>노트 그래프</span>
+            <span className="text-base w-5 text-center">🏷️</span>
+            <span>태그 브라우저</span>
+          </Link>
+          <Link href="/calendar" onClick={onClose}
+            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+              pathname === "/calendar" ? "bg-indigo-500/20 text-indigo-400 font-medium" : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+            }`}>
+            <span className="text-base w-5 text-center">📅</span>
+            <span>캘린더</span>
           </Link>
           <Link href="/stats" onClick={onClose}
             className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
