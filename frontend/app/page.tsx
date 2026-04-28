@@ -95,6 +95,7 @@ export default function DashboardPage() {
   const [mergingId, setMergingId] = useState<string | null>(null);
   const [reclassifying, setReclassifying] = useState(false);
   const [reclassifyResult, setReclassifyResult] = useState<string>("");
+  const [unanalyzedCount, setUnanalyzedCount] = useState(0);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
   const offsetRef = useRef(0);
@@ -102,6 +103,14 @@ export default function DashboardPage() {
   // localStorage에서 핀 초기화
   useEffect(() => {
     setPinnedIds(loadPinnedIds());
+  }, []);
+
+  // 미분석 이미지 노트 수 로드
+  useEffect(() => {
+    fetch("/api/notes/unanalyzed/count")
+      .then((r) => r.ok ? r.json() : { count: 0 })
+      .then((d) => setUnanalyzedCount(d.count ?? 0))
+      .catch(() => {});
   }, []);
 
   // 키워드 자동완성 미리 로드
@@ -254,15 +263,15 @@ export default function DashboardPage() {
   // ─── 일괄 재분류 ──────────────────────────────
 
   const bulkReclassify = async () => {
+    if (unanalyzedCount === 0) return;
     setReclassifying(true);
     setReclassifyResult("");
     try {
-      const res = await fetch("/api/notes/bulk-reclassify?category_filter=기타&limit=50", {
-        method: "POST",
-      });
+      const res = await fetch("/api/notes/bulk-reclassify?limit=30", { method: "POST" });
       if (res.ok) {
         const data = await res.json();
         setReclassifyResult(`✅ ${data.reclassified}개 재분류 완료`);
+        setUnanalyzedCount(data.remaining ?? 0);
         offsetRef.current = 0;
         setNotes([]);
         setHasMore(true);
@@ -443,11 +452,12 @@ export default function DashboardPage() {
             </button>
 
             {/* AI 재분류 — 반짝이 */}
+            <div className="relative shrink-0">
             <button
               onClick={bulkReclassify}
-              disabled={reclassifying}
-              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:border-emerald-300 transition-colors shadow-sm shrink-0 disabled:opacity-50"
-              title={reclassifyResult || "AI 일괄 재분류"}
+              disabled={reclassifying || unanalyzedCount === 0}
+              className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-emerald-500 hover:border-emerald-300 transition-colors shadow-sm disabled:opacity-50"
+              title={reclassifyResult || (unanalyzedCount > 0 ? `미분석 이미지 ${unanalyzedCount}개 재분석` : "미분석 이미지 없음")}
             >
               {reclassifying ? (
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -459,6 +469,12 @@ export default function DashboardPage() {
                 </svg>
               )}
             </button>
+            {unanalyzedCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-0.5 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none pointer-events-none">
+                {unanalyzedCount}
+              </span>
+            )}
+            </div>
 
             {/* 중복 감지 — 문서 두 장 */}
             <button

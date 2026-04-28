@@ -96,6 +96,42 @@ def get_notes(
         return []
 
 
+def get_unanalyzed_notes(limit: int = 50) -> list[dict]:
+    """raw_content='[이미지]'이고 file_url이 있는 미분석 이미지 노트 조회"""
+    try:
+        db = get_db()
+        result = (
+            db.table("notes")
+            .select("*")
+            .eq("raw_content", "[이미지]")
+            .not_.is_("file_url", "null")
+            .order("created_at", desc=False)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+    except Exception as e:
+        logger.error("미분석 노트 조회 실패: %s", e)
+        return []
+
+
+def count_unanalyzed_notes() -> int:
+    """미분석 이미지 노트 수 반환"""
+    try:
+        db = get_db()
+        result = (
+            db.table("notes")
+            .select("id", count="exact")
+            .eq("raw_content", "[이미지]")
+            .not_.is_("file_url", "null")
+            .execute()
+        )
+        return result.count or 0
+    except Exception as e:
+        logger.error("미분석 노트 수 조회 실패: %s", e)
+        return 0
+
+
 def get_note_by_id(note_id: str) -> Optional[dict]:
     """단일 노트 조회"""
     try:

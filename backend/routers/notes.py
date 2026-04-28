@@ -14,6 +14,7 @@ from db.notes import (
     vector_search_notes, get_related_notes, get_graph_data,
     get_duplicates, merge_notes, get_top_keywords, bulk_delete_notes, export_notes,
     get_keyword_stats, get_calendar_notes,
+    get_unanalyzed_notes, count_unanalyzed_notes,
 )
 
 logger = logging.getLogger(__name__)
@@ -60,33 +61,55 @@ async def create_note(body: NoteCreate):
 
 @router.post("/bulk-reclassify")
 async def bulk_reclassify(
-    category_filter: Optional[str] = Query("기타", description="재분류할 카테고리 (기본: 기타, 'all'이면 전체)"),
-    limit: int = Query(50, ge=1, le=200, description="한 번에 처리할 최대 노트 수"),
+    limit: int = Query(30, ge=1, le=100, description="한 번에 처리할 최대 노트 수"),
 ):
     """
-    지정한 카테고리의 노트를 Claude로 일괄 재분류.
-    기본값: '기타' 카테고리만 대상. 'all'이면 전체 재분류.
-    Claude API 호출이 노트 수만큼 발생하므로 limit로 범위 제한.
+    미분석 이미지 노트(raw_content='[이미지]')를 Claude Vision으로 일괄 재분석.
+    file_url에서 이미지를 다운로드하여 OCR·요약·분류를 수행한다.
     """
-    cat = None if category_filter == "all" else category_filter
-    notes = get_notes(category=cat, limit=limit, offset=0)
+    import httpx, re as re_mod
 
+    notes = get_unanalyzed_notes(limit=limit)
     ok, failed = 0, 0
+
     for note in notes:
-        result = classify_content(note["raw_content"])
-        updated = update_note(note["id"], {
-            "summary": result.get("summary", ""),
-            "highlights": result.get("highlights", []),
-            "keywords": result.get("keywords", []),
-            "category": result.get("category", "기타"),
-            "content_type": result.get("content_type", "other"),
-        })
-        if updated:
-            ok += 1
-        else:
+        file_url = note.get("file_url")
+        if not file_url:
+            failed += 1
+            continue
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                r = await client.get(file_url)
+                r.raise_for_status()
+                image_bytes = r.content
+            ct_header = r.headers.get("content-type", "image/jpeg").split(";")[0].strip()
+            ext = re_mod.search(r"\.(jpe?g|png|gif|webp)$", file_url, re_mod.I)
+            mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+                        "gif": "image/gif", "webp": "image/webp"}
+            media_type = (ct_header if ct_header.startswith("image/")
+                          else mime_map.get((ext.group(1).lower() if ext else ""), "image/jpeg"))
+            result = analyze_image(image_bytes, media_type)
+
+            raw_content = result.get("ocr_text") or result.get("summary") or "[이미지]"
+            content_type = "newspaper" if result.get("is_newspaper") else result.get("content_type", "image")
+            updated = update_note(note["id"], {
+                "raw_content": raw_content,
+                "summary": result.get("summary", ""),
+                "highlights": result.get("highlights", []),
+                "keywords": result.get("keywords", []),
+                "category": result.get("category", "기타"),
+                "content_type": content_type,
+            })
+            if updated:
+                ok += 1
+            else:
+                failed += 1
+        except Exception as e:
+            logger.error("배치 이미지 재분류 실패 (id=%s): %s", note["id"], e)
             failed += 1
 
-    return {"reclassified": ok, "failed": failed, "total": len(notes)}
+    remaining = count_unanalyzed_notes()
+    return {"reclassified": ok, "failed": failed, "total": len(notes), "remaining": remaining}
 
 
 # ─────────────────────────────────────────
@@ -276,6 +299,12 @@ async def export(
         media_type="application/json; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=myvault_notes.json"},
     )
+
+
+@router.get("/unanalyzed/count")
+async def unanalyzed_count():
+    """미분석 이미지 노트(raw_content='[이미지]') 수 반환"""
+    return {"count": count_unanalyzed_notes()}
 
 
 # 고정 경로는 반드시 /{note_id} 앞에 위치해야 FastAPI가 올바르게 라우팅함
