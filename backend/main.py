@@ -65,8 +65,8 @@ def start_scheduler() -> None:
     from services.digest import send_daily_digest
 
     scheduler = BackgroundScheduler(timezone="Asia/Seoul")
-    # RSS 수집: 30분마다
-    scheduler.add_job(fetch_all_feeds, "interval", minutes=30, id="rss_fetch")
+    # RSS 수집: 비활성화 (API 비용 절감)
+    # scheduler.add_job(fetch_all_feeds, "interval", minutes=30, id="rss_fetch")
     # 일일 요약: 매일 오전 8시 KST
     scheduler.add_job(send_daily_digest, "cron", hour=8, minute=0, id="daily_digest")
     # Google Drive 백업: 매주 일요일 새벽 2시 KST
@@ -88,3 +88,37 @@ def start_scheduler() -> None:
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "MyVault API"}
+
+
+@app.get("/health/claude")
+async def claude_health_check():
+    """Claude API 연결 상태 진단 — 배포 후 직접 호출해서 에러 원인 파악"""
+    import anthropic
+    result: dict = {"api_key_set": bool(settings.ANTHROPIC_API_KEY)}
+    try:
+        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=20,
+            messages=[{"role": "user", "content": "ping"}],
+        )
+        result["haiku_status"] = "ok"
+        result["haiku_response"] = resp.content[0].text if resp.content else ""
+    except Exception as e:
+        result["haiku_status"] = "error"
+        result["haiku_error"] = f"{type(e).__name__}: {e}"
+
+    try:
+        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        resp = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=20,
+            messages=[{"role": "user", "content": "ping"}],
+        )
+        result["sonnet_status"] = "ok"
+        result["sonnet_response"] = resp.content[0].text if resp.content else ""
+    except Exception as e:
+        result["sonnet_status"] = "error"
+        result["sonnet_error"] = f"{type(e).__name__}: {e}"
+
+    return result

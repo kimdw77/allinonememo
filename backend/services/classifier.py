@@ -109,10 +109,10 @@ def classify_content(content: str) -> dict:
         logger.error("Claude 응답 JSON 파싱 실패: %s", e)
         return _FALLBACK.copy()
     except anthropic.APIError as e:
-        logger.error("Claude API 오류: %s", e)
+        logger.error("Claude API 오류 [%s]: %s", type(e).__name__, e)
         return _FALLBACK.copy()
     except Exception as e:
-        logger.error("분류 중 예상치 못한 오류: %s", e)
+        logger.error("분류 중 예상치 못한 오류 [%s]: %s", type(e).__name__, e)
         return _FALLBACK.copy()
 
 
@@ -152,7 +152,7 @@ def analyze_image(image_bytes: bytes, media_type: str) -> dict:
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=4000,
+            max_tokens=1000,
             messages=[{
                 "role": "user",
                 "content": [
@@ -186,8 +186,8 @@ def analyze_image(image_bytes: bytes, media_type: str) -> dict:
         }
 
     except anthropic.APIError as e:
-        logger.error("이미지 분석 Claude API 오류: %s", e)
+        logger.error("이미지 분석 Claude API 오류 [%s]: %s", type(e).__name__, e)
         return _FALLBACK.copy()
     except Exception as e:
-        logger.error("이미지 분석 실패: %s", e)
+        logger.error("이미지 분석 실패 [%s]: %s", type(e).__name__, e)
         return _FALLBACK.copy()
