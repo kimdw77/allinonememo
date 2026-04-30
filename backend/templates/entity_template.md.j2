@@ -1,0 +1,35 @@
+---
+title: "{{ name }}"
+created: {{ created }}
+updated: {{ updated }}
+type: entity
+domain: {{ domain }}
+confidentiality: {{ 'kita-internal' if domain == 'kita' else 'public' }}
+sources:
+{% for src in sources %}  - "{{ src }}"
+{% endfor %}tags: [{% for tag in tags %}"{{ tag }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+---
+
+# {{ name }}
+
+## 기본 정보
+
+| 항목 | 내용 |
+|------|------|
+| 소속 | {{ affiliation or '' }} |
+| 역할 | {{ role or '' }} |
+
+## 요약
+
+{{ summary or '' }}
+
+## 관련 노트
+
+{{ related_notes or '' }}
+
+## 관련 페이지
+
+{{ related_pages or '' }}
+
+---
+*WikiCompiler 자동 생성 ({{ now }}) [trace:{{ trace_id[:8] }}]*

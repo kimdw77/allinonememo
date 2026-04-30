@@ -85,13 +85,19 @@ def start_scheduler() -> None:
         lambda: asyncio.run(check_fail_rate()),
         "interval", hours=1, id="sync_fail_rate_check",
     )
+    # Phase 9-3: 주간 wiki 보고서 (매주 월요일 09:30 KST)
+    from agents.wiki_reporter import send_weekly_wiki_report
+    scheduler.add_job(
+        lambda: asyncio.run(send_weekly_wiki_report()),
+        "cron", day_of_week="mon", hour=9, minute=30, id="weekly_wiki_report",
+    )
 
     scheduler.start()
     from services.scheduler_instance import set_scheduler
     set_scheduler(scheduler)
     logger.info(
         "스케줄러 시작 (일일 요약 08:00, Drive 백업 일요일 02:00, "
-        "주간 보고서 월요일 09:00, sync 실패율 매시간)"
+        "주간 보고서 월요일 09:00, wiki 보고서 월요일 09:30, sync 실패율 매시간)"
     )
 
 

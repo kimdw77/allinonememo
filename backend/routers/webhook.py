@@ -441,6 +441,78 @@ async def _handle_command(text: str, chat_id: int | None) -> None:
         update_thought_status(thought["id"], "rejected")
         await _send_telegram(chat_id, "❌ 저장을 취소했습니다.")
 
+    elif cmd in ("/wiki", "/wiki@myvaultbot"):
+        # 특정 노트의 wiki 컴파일 강제 실행 (arg = note_id 또는 최근 노트)
+        from agents.wiki_compiler import compile_wiki
+        from services.github_sync import determine_domain
+        from utils.trace_id import new_trace_id
+        notes = get_notes(limit=1)
+        if not notes:
+            await _send_telegram(chat_id, "⚠️ 저장된 노트가 없습니다.")
+            return
+        note = notes[0]
+        domain = determine_domain(note)
+        trace = new_trace_id()
+        await _send_telegram(chat_id, f"🔨 Wiki 컴파일 시작 (노트: `{(note.get('id') or '')[:8]}`)…")
+        try:
+            result = await compile_wiki(note, domain, trace)
+            if result.get("error"):
+                await _send_telegram(chat_id, f"❌ 오류: {result['error']}")
+            else:
+                created = result.get("pages_created", 0)
+                updated = result.get("pages_updated", 0)
+                queued = result.get("pages_queued", 0)
+                rejected = result.get("pages_rejected", 0)
+                await _send_telegram(
+                    chat_id,
+                    f"✅ Wiki 컴파일 완료\n"
+                    f"신규: {created}  업데이트: {updated}  "
+                    f"큐: {queued}  거절: {rejected}",
+                )
+        except Exception as e:
+            await _send_telegram(chat_id, f"❌ Wiki 컴파일 실패: {e}")
+
+    elif cmd in ("/lint", "/lint@myvaultbot"):
+        # Wiki lint 실행 (arg = domain 이름 또는 전체)
+        from agents.wiki_reporter import lint_wiki
+        domain_arg = arg.strip() or None
+        await _send_telegram(chat_id, f"🔍 Wiki Lint 실행 중{'(' + domain_arg + ')' if domain_arg else '(전체)'}…")
+        try:
+            result = await lint_wiki(domain=domain_arg)
+            if result.get("error"):
+                await _send_telegram(chat_id, f"❌ {result['error']}")
+                return
+            total = result.get("total", 0)
+            errors = result.get("errors") or []
+            warnings = result.get("warnings") or []
+            lines = [f"📋 *Wiki Lint 결과* (총 {total}개 페이지)"]
+            if errors:
+                lines.append(f"\n🚨 오류 {len(errors)}건")
+                for e in errors[:5]:
+                    lines.append(f"  • `{e['path'].split('/')[-1]}`: {e['msg']}")
+                if len(errors) > 5:
+                    lines.append(f"  … 외 {len(errors) - 5}건")
+            if warnings:
+                lines.append(f"\n⚠️ 경고 {len(warnings)}건")
+                for w in warnings[:3]:
+                    lines.append(f"  • `{w['path'].split('/')[-1]}`: {w['msg']}")
+                if len(warnings) > 3:
+                    lines.append(f"  … 외 {len(warnings) - 3}건")
+            if not errors and not warnings:
+                lines.append("\n✅ 이상 없음")
+            await _send_telegram(chat_id, "\n".join(lines))
+        except Exception as e:
+            await _send_telegram(chat_id, f"❌ Lint 실패: {e}")
+
+    elif cmd in ("/report-wiki", "/report-wiki@myvaultbot"):
+        # 주간 wiki 보고서 즉시 실행
+        from agents.wiki_reporter import send_weekly_wiki_report
+        await _send_telegram(chat_id, "📖 주간 Wiki 보고서 생성 중…")
+        try:
+            await send_weekly_wiki_report()
+        except Exception as e:
+            await _send_telegram(chat_id, f"❌ 보고서 생성 실패: {e}")
+
     elif cmd in ("/help", "/help@myvaultbot", "/start"):
         help_text = (
             "🤖 *MyVault 에이전트 명령어*\n\n"
@@ -448,6 +520,10 @@ async def _handle_command(text: str, chat_id: int | None) -> None:
             "/task `내용` — 태스크 추출·저장\n"
             "/critique `내용` — 비판적 검토·피드백\n"
             "/report — 주간 보고서 생성\n\n"
+            "📖 *Wiki (Phase 9)*\n"
+            "/wiki — 최근 노트로 wiki 컴파일\n"
+            "/lint `[도메인]` — wiki 페이지 lint 검사\n"
+            "/report\\-wiki — 주간 wiki 변경 보고서\n\n"
             "📅 *일정·검색*\n"
             "/cal `내용` — Google Calendar 등록\n"
             "/search `키워드` — 노트 검색\n"

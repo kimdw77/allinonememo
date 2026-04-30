@@ -77,6 +77,9 @@ async def enqueue_sync(note: dict, trace_id: str) -> None:
         # ── HARNESS 3-1: 지연 확인 (fire-and-forget) ────────────────────
         asyncio.create_task(_check_lag_alert())
 
+        # ── Phase 9-2: Wiki Compiler (fire-and-forget) ───────────────────
+        asyncio.create_task(_run_wiki_compiler(note, domain, trace_id))
+
     except Exception as exc:
         logger.error("동기화 실패 | note_id=%s: %s trace=%s", note_id, exc, trace_id[:8])
         update_sync_status(
@@ -86,6 +89,25 @@ async def enqueue_sync(note: dict, trace_id: str) -> None:
             attempts=1,
         )
         await _send_sync_fail_alert(note_id, trace_id, str(exc))
+
+
+# ── Phase 9-2: Wiki Compiler 트리거 ──────────────────────────────────
+
+
+async def _run_wiki_compiler(note: dict, domain: str, trace_id: str) -> None:
+    """동기화 성공 후 wiki 컴파일. 실패해도 동기화 결과에 영향 없음."""
+    try:
+        from agents.wiki_compiler import compile_wiki
+        result = await compile_wiki(note, domain, trace_id)
+        if result.get("pages_created") or result.get("pages_updated"):
+            logger.info(
+                "wiki 컴파일 완료 +%d ~%d trace=%s",
+                result.get("pages_created", 0),
+                result.get("pages_updated", 0),
+                trace_id[:8],
+            )
+    except Exception as e:
+        logger.warning("wiki_compiler 실행 실패 (무시): %s trace=%s", e, trace_id[:8])
 
 
 # ── HARNESS 3-3: 격리 처리 ────────────────────────────────────────────
