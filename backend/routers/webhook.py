@@ -410,12 +410,14 @@ async def _handle_command(text: str, chat_id: int | None) -> None:
         from db.thoughts import get_pending_confirm_thought, update_thought_status
         from services.classifier import classify_content
         from db.notes import insert_note
+        from agents.pipeline import _schedule_sync
+        from utils.trace_id import new_trace_id
         thought = get_pending_confirm_thought()
         if not thought:
             await _send_telegram(chat_id, "⚠️ 확인 대기 중인 메모가 없습니다.")
             return
         result = classify_content(thought["raw_input"])
-        insert_note(
+        note = insert_note(
             source="telegram",
             raw_content=thought["raw_input"],
             summary=result.get("summary", ""),
@@ -426,6 +428,8 @@ async def _handle_command(text: str, chat_id: int | None) -> None:
             metadata={"confirmed_by": "user"},
         )
         update_thought_status(thought["id"], "processed")
+        if note:
+            _schedule_sync(note, new_trace_id())
         await _send_telegram(chat_id, "✅ 저장 완료!")
 
     elif cmd in ("/no", "/no@myvaultbot"):
@@ -667,8 +671,10 @@ async def _handle_callback_query(callback_query: dict) -> None:
             return
         from services.classifier import classify_content
         from db.notes import insert_note
+        from agents.pipeline import _schedule_sync
+        from utils.trace_id import new_trace_id
         result = classify_content(thought["raw_input"])
-        insert_note(
+        note = insert_note(
             source="telegram",
             raw_content=thought["raw_input"],
             summary=result.get("summary", ""),
@@ -679,6 +685,8 @@ async def _handle_callback_query(callback_query: dict) -> None:
             metadata={"confirmed_by": "user"},
         )
         update_thought_status(thought["id"], "processed")
+        if note:
+            _schedule_sync(note, new_trace_id())
         await _send_telegram(chat_id, "✅ 저장 완료!")
 
     elif data == "confirm_no":

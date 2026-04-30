@@ -72,6 +72,33 @@ async def get_failed_syncs(limit: int = Query(50, ge=1, le=200)):
     return get_failed_syncs(limit=limit)
 
 
+@router.post("/github/backfill")
+async def backfill_unsynced_notes(limit: int = Query(50, ge=1, le=200)):
+    """sync_status 레코드가 없는 notes를 일괄 재동기화 (최신순)."""
+    if not settings.GITHUB_TOKEN or not settings.GITHUB_REPO:
+        raise HTTPException(status_code=503, detail="GITHUB_TOKEN/GITHUB_REPO 환경변수 미설정")
+
+    from db.notes import get_notes
+    from db.sync_status import get_sync_status_list
+    from workers.sync_worker import enqueue_sync
+    from utils.trace_id import new_trace_id
+    import asyncio
+
+    synced_note_ids: set[str] = {
+        r["note_id"] for r in get_sync_status_list(limit=1000) if r.get("note_id")
+    }
+    all_notes = get_notes(limit=limit)
+    unsynced = [n for n in all_notes if n.get("id") and n["id"] not in synced_note_ids]
+
+    queued: list[str] = []
+    for note in unsynced:
+        trace_id = new_trace_id()
+        asyncio.create_task(enqueue_sync(note, trace_id))
+        queued.append(note["id"])
+
+    return {"status": "queued", "count": len(queued), "note_ids": queued}
+
+
 @router.post("/github/retry/{sync_id}")
 async def retry_sync(sync_id: str):
     """실패·격리된 sync_status 항목을 수동 재시도."""
