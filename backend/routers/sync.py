@@ -96,10 +96,10 @@ async def backfill_unsynced_notes(limit: int = Query(50, ge=1, le=200)):
     queued: list[str] = []
     for note in unsynced:
         trace_id = new_trace_id()
-        asyncio.create_task(enqueue_sync(note, trace_id))
+        await enqueue_sync(note, trace_id)   # 순차 처리 — 동시 SHA 충돌 방지
         queued.append(note["id"])
 
-    return {"status": "queued", "count": len(queued), "note_ids": queued}
+    return {"status": "ok", "count": len(queued), "note_ids": queued}
 
 
 @router.post("/github/retry/{sync_id}")
