@@ -84,11 +84,14 @@ async def backfill_unsynced_notes(limit: int = Query(50, ge=1, le=200)):
     from utils.trace_id import new_trace_id
     import asyncio
 
-    synced_note_ids: set[str] = {
-        r["note_id"] for r in get_sync_status_list(limit=1000) if r.get("note_id")
+    # synced/quarantined 은 제외, pending/failed 는 재처리 대상에 포함
+    already_ok_ids: set[str] = {
+        r["note_id"]
+        for r in get_sync_status_list(limit=1000)
+        if r.get("note_id") and r.get("status") in ("synced", "quarantined")
     }
     all_notes = get_notes(limit=limit)
-    unsynced = [n for n in all_notes if n.get("id") and n["id"] not in synced_note_ids]
+    unsynced = [n for n in all_notes if n.get("id") and n["id"] not in already_ok_ids]
 
     queued: list[str] = []
     for note in unsynced:
