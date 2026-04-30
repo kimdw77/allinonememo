@@ -246,3 +246,11 @@ python-slugify>=8.0.1
 4. **로컬 테스트**: `pytest tests/test_github_sync.py` 통과
 5. **Railway 배포**: `git push origin main` (Railway 자동 배포)
 6. **운영 검증**: 텔레그램으로 테스트 노트 5건 작성 → my-kms Repo 확인
+
+---
+
+## 변경 이력
+
+| 날짜 | 변경 내용 | 사유 |
+|------|----------|------|
+| 2026-04-30 | 파일명 슬러그를 `allow_unicode=True` 로 변경 (한글 보존, max_length=40) | LLM-Wiki 패턴에서 한글 파일명이 위키 링크·검색·합성에 필수; 음차 슬러그는 Obsidian 탐색 불가 |

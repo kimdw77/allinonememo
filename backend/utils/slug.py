@@ -1,21 +1,19 @@
 """
-utils/slug.py — 한글·영문 혼용 제목을 URL-safe slug로 변환
+utils/slug.py — 한글·영문 혼용 제목을 파일명 안전 slug로 변환
 """
 from slugify import slugify
 
 
-def to_slug(title: str, max_length: int = 80) -> str:
+def to_slug(title: str, max_length: int = 40) -> str:
     """
-    한글·영문 혼용 제목 → URL-safe slug (음성 변환).
+    한글·영문 혼용 제목 → 파일명 안전 slug (한글 보존).
 
-    예: "AI 에이전트 전략" → "ai-eijenteu-jeonlyag"
-    예: "2026년 4월 회의록" → "2026nyeon-4wol-hoeuilog"
-
-    python-slugify 기본 transliterator(text-unidecode)가 한글을 음성 변환.
-    의미 번역이 아닌 음성 변환이므로 영단어 그대로 남기는 것이 명확할 때는
-    영문 키워드를 앞에 붙여서 전송하면 된다.
+    예: "복부지방감소를 위한 운동" → "복부지방감소를-위한-운동"
+    예: "AI 에이전트 전략" → "ai-에이전트-전략"
+    예: "2026년 4월 회의록" → "2026년-4월-회의록"
     """
     if not title:
         return "untitled"
-    result = slugify(title, allow_unicode=False, separator="-", max_length=max_length)
+    result = slugify(title, allow_unicode=True, separator="-",
+                     max_length=max_length, word_boundary=True)
     return result or "untitled"
