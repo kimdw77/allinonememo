@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     # Tavily (신문·기사 관련 웹검색)
     TAVILY_API_KEY: str = ""
 
+    # GitHub 동기화 (Phase 9-1)
+    GITHUB_TOKEN: str = ""
+    GITHUB_REPO: str = "kimdw77/my-kms"
+    GITHUB_BRANCH: str = "main"
+    WIKI_DEFAULT_DOMAIN: str = "personal"   # personal | kita
+    SYNC_MODE: str = "realtime"             # realtime | batch
+    SYNC_LAG_ALERT_SECONDS: int = 30        # HARNESS 3-1: 평균 지연 임계치(초)
+    SYNC_FAIL_RATE_ALERT_PERCENT: float = 5.0  # HARNESS 3-2: 24h 실패율 임계치(%)
+
     # API 보안: 백엔드 내부 API 호출에 사용하는 시크릿 키
     API_SECRET_KEY: str
 

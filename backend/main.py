@@ -79,10 +79,20 @@ def start_scheduler() -> None:
         lambda: asyncio.run(send_weekly_report()),
         "cron", day_of_week="mon", hour=9, minute=0, id="weekly_report",
     )
+    # HARNESS 3-2: GitHub 동기화 실패율 점검 (매시간)
+    from workers.sync_worker import check_fail_rate
+    scheduler.add_job(
+        lambda: asyncio.run(check_fail_rate()),
+        "interval", hours=1, id="sync_fail_rate_check",
+    )
+
     scheduler.start()
     from services.scheduler_instance import set_scheduler
     set_scheduler(scheduler)
-    logger.info("스케줄러 시작 (RSS 30분, 일일 요약 08:00, Drive 백업 일요일 02:00, 주간 보고서 월요일 09:00)")
+    logger.info(
+        "스케줄러 시작 (일일 요약 08:00, Drive 백업 일요일 02:00, "
+        "주간 보고서 월요일 09:00, sync 실패율 매시간)"
+    )
 
 
 @app.get("/health")

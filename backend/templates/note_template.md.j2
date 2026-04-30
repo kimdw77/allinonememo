@@ -1,0 +1,37 @@
+---
+title: "{{ note.title or note.summary or note.id }}"
+created: {{ (note.created_at or '')[:10] }}
+updated: {{ (note.updated_at or note.created_at or '')[:10] }}
+type: note
+domain: {{ domain }}
+confidentiality: {{ 'kita-internal' if domain == 'kita' else 'personal' }}
+sources:
+  - "note_id:{{ note.id }}"
+{% if note.source %}  - "{{ note.source }}"
+{% endif %}trace_ids:
+  - "{{ note.trace_id or trace_id }}"
+tags: [{{ (note.keywords or []) | join(', ') }}]
+category: {{ note.category or '기타' }}
+---
+
+# {{ note.title or note.summary or '제목 없음' }}
+
+## 요약
+{{ note.summary or '' }}
+
+## 본문
+{{ note.raw_content or '' }}
+
+{% if related_links %}
+## 관련 링크
+{% for link in related_links %}
+- [{{ link.title }}]({{ link.url }})
+{% endfor %}
+{% endif %}
+{% if note.file_url %}
+## 첨부
+- [원본 파일]({{ note.file_url }})
+{% endif %}
+
+---
+*MyVault에서 자동 동기화됨 ({{ now }})*
