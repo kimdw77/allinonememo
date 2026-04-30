@@ -10,7 +10,7 @@ sources:
 {% if note.source %}  - "{{ note.source }}"
 {% endif %}trace_ids:
   - "{{ note.trace_id or trace_id }}"
-tags: [{{ (note.keywords or []) | join(', ') }}]
+tags: [{% for kw in (note.keywords or []) %}"{{ kw }}"{% if not loop.last %}, {% endif %}{% endfor %}]
 category: {{ note.category or '기타' }}
 ---
 
