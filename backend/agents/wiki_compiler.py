@@ -285,7 +285,8 @@ def _generate_page(
             tpl = env.get_template(
                 "entity_template.md.j2" if item_type == "entity" else "concept_template.md.j2"
             )
-            note_ref = f"- [[{now_date}-{(note.get('id') or '')[:8]}]] ({note.get('title') or '노트'})"
+            note_title = note.get("title") or note.get("summary") or "노트"
+            note_ref = f"- {now_date} {note_title} (note_id:{(note.get('id') or '')[:8]})"
             return tpl.render(
                 name=name,
                 created=now_date,
